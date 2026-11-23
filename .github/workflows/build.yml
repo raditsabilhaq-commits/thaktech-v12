@@ -1,0 +1,37 @@
+name: Build THAKTECH APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Cache Buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: thaktech-v12-cache-${{ runner.os }}-v1
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openjdk-17-jdk unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+          pip install --quiet buildozer cython==0.29.33
+      - name: Build APK
+        run: |
+          buildozer android debug
+          ls -lh bin/
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: THAKTECH-V12.1-APK
+          path: bin/*.apk
+          retention-days: 90
