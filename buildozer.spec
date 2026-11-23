@@ -13,6 +13,10 @@ android.api = 33
 android.minapi = 21
 android.ndk = 25b
 android.archs = arm64-v8a,armeabi-v7a
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+android.accept_sdk_license = True
 android.allow_backup = True
 p4a.branch = master
 [buildozer]
