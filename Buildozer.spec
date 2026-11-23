@@ -1,0 +1,20 @@
+[app]
+title = THAKTECH
+package.name = thaktech
+package.domain = org.thaktech
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
+version = 12.1
+requirements = python3,kivy,pyjnius
+orientation = portrait
+fullscreen = 0
+android.permissions = INTERNET,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_CONNECT,BLUETOOTH_SCAN,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,NFC
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+android.archs = arm64-v8a,armeabi-v7a
+android.allow_backup = True
+p4a.branch = master
+[buildozer]
+log_level = 2
+warn_on_root = 1
