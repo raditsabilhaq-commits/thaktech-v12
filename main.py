@@ -1,5 +1,3 @@
-# THAKTECH V12.0 FINAL - LAYAK PAKAI - 1x PASTE - JANGAN DIEDIT LAGI
-main_code = r'''
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -618,30 +616,4 @@ class ThakTechApp(App):
             for i,h in enumerate(self.history,1): t+=f"{i}. {h}\\n\\n"
             self.set_output(t)
         except Exception as e: self.set_output(f"History error: {e}")
-if __name__=='__main__': ThakTechApp().run()
-'''
-spec_code = r'''[app]
-title = THAKTECH
-package.name = thaktech
-package.domain = org.thaktech
-source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
-version = 12.0
-requirements = python3,kivy,pyjnius
-orientation = portrait
-fullscreen = 0
-android.permissions = INTERNET,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_CONNECT,BLUETOOTH_SCAN,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,NFC
-android.api = 33
-android.minapi = 21
-android.ndk = 25b
-android.archs = arm64-v8a,armeabi-v7a
-android.allow_backup = True
-p4a.branch = master
-[buildozer]
-log_level = 2
-warn_on_root = 1
-'''
-open('main.py','w',encoding='utf-8').write(main_code)
-open('buildozer.spec','w',encoding='utf-8').write(spec_code)
-print("BERHASIL - V12.0 FINAL LAYAK PAKAI")
-import py_compile; py_compile.compile('main.py', doraise=True); print("KODE AMAN - 68+ DTC - 25+ DATA - 7 FITUR KEY - SIAP BUILD - buildozer android debug")
+if __name__=='__main__': ThakTechApp().run() 
