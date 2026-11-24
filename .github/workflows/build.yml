@@ -20,13 +20,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Cache Buildozer
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          key: thaktech-v13-cache-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
       - name: Install Dependencies
         run: |
           sudo apt-get update -qq
@@ -34,6 +27,7 @@ jobs:
           pip install --quiet buildozer cython==0.29.36
       - name: Build APK
         run: |
+          rm -rf .buildozer bin
           buildozer android debug
           ls -lh bin
       - name: Upload APK
