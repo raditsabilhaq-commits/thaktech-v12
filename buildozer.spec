@@ -18,7 +18,6 @@ android.minapi = 21
 android.ndk = 25b
 android.accept_sdk_license = True
 android.allow_backup = True
-android.gradle_dependencies =
 
 [buildozer]
 log_level = 2
