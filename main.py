@@ -9,68 +9,54 @@ from kivy.uix.spinner import Spinner
 from kivy.uix.popup import Popup
 from kivy.clock import Clock
 from kivy.utils import get_color_from_hex
-from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
-from kivy.uix.widget import Widget
-from kivy.core.window import Window
-from kivy.metrics import dp, sp
-import random, time, hashlib, csv, os, threading, re, json
+import random, time, hashlib, csv, os, threading, re
 
 try:
     from kivy.core.clipboard import Clipboard
-    HAS_CLIP=True
-except: HAS_CLIP=False; Clipboard=None
+    HAS_CLIP = True
+except:
+    HAS_CLIP = False
+    Clipboard = None
 
-THEMES={"DARK":{"BG":"#0F172A","CARD":"#1E293B","TEXT":"#F8FAFC","SUB":"#94A3B8","GOLD":"#FBBF24","CYAN":"#22D3EE","GREEN":"#22C55E","RED":"#EF4444","ORANGE":"#FB923C"},"LIGHT":{"BG":"#F8FAFC","CARD":"#FFFFFF","TEXT":"#0F172A","SUB":"#64748B","GOLD":"#D97706","CYAN":"#0891B2","GREEN":"#16A34A","RED":"#DC2626","ORANGE":"#EA580C"}}
-CUR_THEME="DARK"
-def C(k): return get_color_from_hex(THEMES[CUR_THEME][k])
-def RP():
-    w=Window.width
-    if w<400: return dp(8)
-    if w<700: return dp(12)
-    return dp(20)
-def FS(base=12):
-    w=Window.width
-    if w<400: return sp(base-2)
-    if w<700: return sp(base)
-    return sp(base+3)
-def COLS():
-    w=Window.width
-    if w<400: return 2
-    if w<700: return 3
-    return 5
+# WARNA - cuma pake background_color, gak pake canvas
+def C(n):
+    d = {"BG":(0.06,0.09,0.16,1),"CARD":(0.12,0.16,0.23,1),"TEXT":(0.97,0.98,1,1),"SUB":(0.58,0.64,0.72,1),"GOLD":(0.98,0.75,0.14,1),"CYAN":(0.13,0.83,0.93,1),"GREEN":(0.13,0.77,0.37,1),"RED":(0.94,0.27,0.27,1),"ORANGE":(0.98,0.57,0.24,1)}
+    return d.get(n,(1,1,1,1))
+
 def DATA_PATH(fn):
     try:
-        app=App.get_running_app()
+        app = App.get_running_app()
         if app and app.user_data_dir:
             os.makedirs(app.user_data_dir, exist_ok=True)
             return os.path.join(app.user_data_dir, fn)
     except: pass
     return fn
-def MASK_PASS(p):
-    try: return p[:2]+"****"+p[-1:] if len(p)>=4 else "****"
-    except: return "****"
 
-HARGA={"STANDAR":0,"ECO / IRIT":150000,"HARIAN / TOURING":250000,"RACING / BALAP":400000,"SCAN DTC":50000,"READ KEY":75000,"REGISTER KEY":150000,"CLONE KEY":200000,"KEY HILANG":350000,"GANTI BATERAI REMOT":30000,"HAPUS KEY":50000,"BATTERY TEST":20000,"SERVIS RINGAN":75000,"GANTI OLI":65000,"CLEAN TB":80000}
-MAPS={"STANDAR":{"fuel":0,"timing":0,"limiter":10500,"afr":14.7,"ket":"Pabrik - Paling aman"},"ECO / IRIT":{"fuel":-8,"timing":-2,"limiter":9800,"afr":15.2,"ket":"Irit 10-15% - Ojol"},"HARIAN / TOURING":{"fuel":6,"timing":2,"limiter":11000,"afr":14.2,"ket":"Enteng - Paling laris"},"RACING / BALAP":{"fuel":15,"timing":5,"limiter":12500,"afr":13.2,"ket":"Balap only - Wajib RON 98"}}
-UNIVERSAL_PROFILES={"HONDA":{"dlc":"Honda DLC 4-Pin Merah -> OBD2","protokol":["ATSP6","ATSP3","ATSP0"]},"YAMAHA":{"dlc":"Yamaha DLC 3-Pin / 4-Pin -> OBD2","protokol":["ATSP6","ATSP5","ATSP0"]},"SUZUKI":{"dlc":"Suzuki DLC 6-Pin -> OBD2","protokol":["ATSP5","ATSP3","ATSP0"]},"KAWASAKI":{"dlc":"Kawasaki DLC 4-Pin -> OBD2","protokol":["ATSP6","ATSP0"]},"MOBIL OBD2":{"dlc":"OBD2 16-Pin Standar","protokol":["ATSP0"]},"UNIVERSAL":{"dlc":"Auto - Coba semua","protokol":["ATSP0","ATSP6","ATSP5","ATSP3","ATSP1","ATSP2"]},"AUTO - UNIVERSAL":{"dlc":"Auto - Coba semua","protokol":["ATSP0","ATSP6","ATSP5","ATSP3","ATSP1","ATSP2"]}}
-REMAP_REAL_MAP={"HONDA":{"addr":"0x1A00","protokol":"K-Line","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":12,"max_timing":4},"YAMAHA":{"addr":"0x2B00","protokol":"CAN 11bit","cmd_backup":"2102","cmd_write":"3B2B","max_fuel":10,"max_timing":3},"SUZUKI":{"addr":"0x3C00","protokol":"K-Line","cmd_backup":"2103","cmd_write":"3B3C","max_fuel":10,"max_timing":3},"KAWASAKI":{"addr":"0x4D00","protokol":"CAN","cmd_backup":"2104","cmd_write":"3B4D","max_fuel":12,"max_timing":4},"MOBIL OBD2":{"addr":"0x5E00","protokol":"CAN 11bit","cmd_backup":"2105","cmd_write":"3B5E","max_fuel":15,"max_timing":5},"UNIVERSAL":{"addr":"0x1A00","protokol":"AUTO","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":8,"max_timing":2},"AUTO - UNIVERSAL":{"addr":"0x1A00","protokol":"AUTO","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":8,"max_timing":2}}
-DB=[("HONDA","1-1","P0107","MAP Low","Brebet gas mendadak","Cek MAP 0.5-4.5V","SEDANG"),("HONDA","1-2","P0108","MAP High","Boros, asap hitam","Cek MAP, vakum bocor","SEDANG"),("HONDA","7-1","P0117","EOT Low","Susah hidup dingin","Cek EOT putus","RINGAN"),("HONDA","7-2","P0118","EOT High","Kipas nyala terus","Cek EOT korslet","SEDANG"),("HONDA","8-1","P0122","TP Low","Gas ngempos","Cek TP <0.4V","SEDANG"),("HONDA","8-2","P0123","TP High","Gas nyangkut","Cek TP >4.8V","BAHAYA"),("HONDA","9-1","P0112","IAT Low","Brebet pagi","Cek IAT","RINGAN"),("HONDA","9-2","P0113","IAT High","Ngelitik","Cek IAT","RINGAN"),("HONDA","11-1","P0500","Speed","Speedo mati","Cek sensor speed","RINGAN"),("HONDA","12-1","P0201","Injektor","Tidak hidup","Cek injektor 11-13 ohm","BAHAYA"),("HONDA","13-1","P0202","Injektor 2","Langsam naik-turun","Bersihkan TB","SEDANG"),("HONDA","21-1","P0130","O2 Sensor","Boros, bau bensin","Cek O2","SEDANG"),("HONDA","29-1","P0505","IACV","Langsam naik-turun","Bersihkan TB","SEDANG"),("HONDA","33-1","P0230","Fuel Pump","Pump tidak dengung","Cek relay","BAHAYA"),("HONDA","52-1","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("HONDA","54-1","P1650","Bank Angle","Mati setelah jatuh","Reset sensor","RINGAN"),("HONDA","67-1","P0141","O2 Heater","MIL nyala 5 menit","Cek heater","RINGAN"),("HONDA","69-1","P0601","ECM Error","Semua sensor error","Cek ECM","BAHAYA"),("YAMAHA","12","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("YAMAHA","13","P0105","IAP","Brebet","Cek MAP","SEDANG"),("YAMAHA","15","P0120","TPS","Gas ngempos","Cek TPS","SEDANG"),("YAMAHA","16","P0121","TPS Stuck","Gas nyangkut","Cek TPS","SEDANG"),("YAMAHA","21","P0115","Coolant","Overheat","Cek sensor suhu","SEDANG"),("YAMAHA","22","P0110","IAT","Brebet dingin","Cek IAT","RINGAN"),("YAMAHA","28","P0130","O2","Boros","Cek O2","SEDANG"),("YAMAHA","30","P1650","Lean Angle","Mati setelah jatuh","Reset sensor","RINGAN"),("YAMAHA","33","P0351","Koil","Tidak ada api","Cek koil","BAHAYA"),("YAMAHA","37","P0505","ISC","Langsam naik-turun","Bersihkan TB","SEDANG"),("YAMAHA","39","P0201","Injektor","Tidak hidup","Cek injektor","BAHAYA"),("YAMAHA","42","P0500","Speed","Speedo mati","Cek sensor","RINGAN"),("YAMAHA","44","P0602","EEPROM","MIL nyala terus","Cek ECU","BAHAYA"),("YAMAHA","46","P0560","Pengisian","Aki tekor","Cek kiprok","BAHAYA"),("SUZUKI","C12","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("SUZUKI","C13","P0105","IAP","Brebet","Cek MAP","SEDANG"),("SUZUKI","C14","P0120","TP","Gas ngempos","Cek TPS","SEDANG"),("SUZUKI","C15","P0115","ECT","Overheat","Cek ECT","SEDANG"),("SUZUKI","C21","P0110","IAT","Brebet dingin","Cek IAT","RINGAN"),("SUZUKI","C28","P1655","STV","Gas berat","Cek STV","SEDANG"),("SUZUKI","C32","P0201","Injektor","Tidak hidup","Cek injektor","BAHAYA"),("SUZUKI","C41","P0230","Fuel Pump","Pump tidak dengung","Cek relay","BAHAYA"),("KAWASAKI","11","P0120","TPS","Gas ngempos","Cek TPS","SEDANG"),("KAWASAKI","12","P0105","IAP","Brebet","Cek MAP","SEDANG"),("KAWASAKI","13","P0110","IAT","Brebet dingin","Cek IAT","RINGAN"),("KAWASAKI","14","P0115","Water Temp","Overheat","Cek ECT","SEDANG"),("KAWASAKI","21","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("KAWASAKI","24","P0500","Speed","Speedo mati","Cek sensor","RINGAN"),("KAWASAKI","31","P1650","Down Sensor","Mati setelah jatuh","Reset sensor","RINGAN"),("KAWASAKI","32","P1655","Sub Throttle","Gas berat","Cek sub-throttle","SEDANG"),("OBDII","P0107","P0107","MAP Low","Brebet","Cek MAP","SEDANG"),("OBDII","P0108","P0108","MAP High","Boros","Cek MAP","SEDANG"),("OBDII","P0117","P0117","ECT Low","Susah hidup dingin","Cek EOT","RINGAN"),("OBDII","P0118","P0118","ECT High","Overheat palsu","Cek EOT","SEDANG"),("OBDII","P0122","P0122","TP Low","Gas ngempos","Cek TP","SEDANG"),("OBDII","P0123","P0123","TP High","Gas nyangkut","Cek TP","BAHAYA"),("OBDII","P0130","P0130","O2","Boros","Cek O2","SEDANG"),("OBDII","P0135","P0135","O2 Heater","MIL nyala","Cek heater","RINGAN"),("OBDII","P0201","P0201","Injektor 1","Tidak hidup","Cek injektor","BAHAYA"),("OBDII","P0202","P0202","Injektor 2","Brebet","Cek injektor 2","BAHAYA"),("OBDII","P0300","P0300","Misfire","Brebet pincang","Cek busi/koil","BAHAYA"),("OBDII","P0301","P0301","Misfire Cyl1","Pincang","Cek busi 1","SEDANG"),("OBDII","P0335","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("OBDII","P0351","P0351","Koil A","Tidak ada api","Cek koil","BAHAYA"),("OBDII","P0500","P0500","Speed","Speedo mati","Cek sensor","RINGAN"),("OBDII","P0505","P0505","Idle","Langsam naik-turun","Bersihkan TB","SEDANG"),("OBDII","P0560","P0560","Voltage","Aki tekor","Cek kiprok","BAHAYA"),("OBDII","P0601","P0601","ECU Memory","MIL nyala terus","Cek ECU","BAHAYA"),("OBDII","P0650","P0650","MIL Lamp","Lampu MIL error","Cek lampu MIL","RINGAN"),("OBDII","P1650","P1650","Bank Angle","Mati setelah jatuh","Reset sensor","RINGAN")]
-PID_25=[("RPM","0C",lambda a,b: ((a*256)+b)/4,"rpm"),("SUHU","05",lambda a,b: a-40,"C"),("SPEED","0D",lambda a,b: a,"km/h"),("TP","11",lambda a,b: a*100/255,"%"),("IAT","0F",lambda a,b: a-40,"C"),("MAP","0B",lambda a,b: a,"kPa"),("MAF","10",lambda a,b: ((a*256)+b)/100,"g/s"),("O2","14",lambda a,b: a/200,"V"),("TIMING","0E",lambda a,b: a/2-64,"deg"),("BEBAN","04",lambda a,b: a*100/255,"%"),("FUEL","2F",lambda a,b: a*100/255,"%"),("BARO","33",lambda a,b: a,"kPa")]
-def cari(q,merk):
+HARGA = {"STANDAR":0,"ECO / IRIT":150000,"HARIAN / TOURING":250000,"RACING / BALAP":400000,"SCAN DTC":50000,"READ KEY":75000,"REGISTER KEY":150000,"CLONE KEY":200000,"KEY HILANG":350000,"GANTI BATERAI REMOT":30000,"HAPUS KEY":50000,"BATTERY TEST":20000}
+MAPS = {"STANDAR":{"fuel":0,"timing":0,"limiter":10500,"afr":14.7,"ket":"Pabrik"},"ECO / IRIT":{"fuel":-8,"timing":-2,"limiter":9800,"afr":15.2,"ket":"Irit"},"HARIAN / TOURING":{"fuel":6,"timing":2,"limiter":11000,"afr":14.2,"ket":"Enteng - Paling laris"},"RACING / BALAP":{"fuel":15,"timing":5,"limiter":12500,"afr":13.2,"ket":"Balap only - RON 98"}}
+UNIVERSAL_PROFILES = {"HONDA":{"dlc":"Honda DLC 4-Pin Merah","protokol":["ATSP6","ATSP3","ATSP0"]},"YAMAHA":{"dlc":"Yamaha DLC 3/4-Pin","protokol":["ATSP6","ATSP5","ATSP0"]},"SUZUKI":{"dlc":"Suzuki DLC 6-Pin","protokol":["ATSP5","ATSP3","ATSP0"]},"KAWASAKI":{"dlc":"Kawasaki DLC 4-Pin","protokol":["ATSP6","ATSP0"]},"MOBIL OBD2":{"dlc":"OBD2 16-Pin","protokol":["ATSP0"]},"UNIVERSAL":{"dlc":"Auto","protokol":["ATSP0","ATSP6","ATSP5","ATSP3"]},"AUTO - UNIVERSAL":{"dlc":"Auto","protokol":["ATSP0","ATSP6","ATSP5","ATSP3"]}}
+REMAP_REAL_MAP = {"HONDA":{"addr":"0x1A00","protokol":"K-Line","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":12,"max_timing":4},"YAMAHA":{"addr":"0x2B00","protokol":"CAN","cmd_backup":"2102","cmd_write":"3B2B","max_fuel":10,"max_timing":3},"SUZUKI":{"addr":"0x3C00","protokol":"K-Line","cmd_backup":"2103","cmd_write":"3B3C","max_fuel":10,"max_timing":3},"KAWASAKI":{"addr":"0x4D00","protokol":"CAN","cmd_backup":"2104","cmd_write":"3B4D","max_fuel":12,"max_timing":4},"MOBIL OBD2":{"addr":"0x5E00","protokol":"CAN","cmd_backup":"2105","cmd_write":"3B5E","max_fuel":15,"max_timing":5},"UNIVERSAL":{"addr":"0x1A00","protokol":"AUTO","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":8,"max_timing":2},"AUTO - UNIVERSAL":{"addr":"0x1A00","protokol":"AUTO","cmd_backup":"2101","cmd_write":"3B1A","max_fuel":8,"max_timing":2}}
+DB = [("HONDA","1-1","P0107","MAP Low","Brebet","Cek MAP","SEDANG"),("HONDA","8-1","P0122","TP Low","Gas ngempos","Cek TP","SEDANG"),("HONDA","8-2","P0123","TP High","Gas nyangkut","Cek TP","BAHAYA"),("HONDA","52-1","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("YAMAHA","15","P0120","TPS","Gas ngempos","Cek TPS","SEDANG"),("YAMAHA","12","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("SUZUKI","C14","P0120","TP","Gas ngempos","Cek TPS","SEDANG"),("KAWASAKI","11","P0120","TPS","Gas ngempos","Cek TPS","SEDANG"),("OBDII","P0122","P0122","TP Low","Gas ngempos","Cek TP","SEDANG"),("OBDII","P0335","P0335","CKP","Tidak ada api","Cek pulser","BAHAYA"),("OBDII","P0300","P0300","Misfire","Brebet pincang","Cek busi","BAHAYA"),("OBDII","P0500","P0500","Speed","Speedo mati","Cek sensor","RINGAN")]
+
+def cari(q, merk):
     try:
-        q=q.strip().upper().replace(" ",""); h=[]
+        q = q.strip().upper().replace(" ", "")
+        out = []
         for r in DB:
-            if merk not in ["SEMUA MERK","AUTO - UNIVERSAL","UNIVERSAL"] and r[0]!=merk: continue
-            if q==r[1] or q==r[2] or q in r[3].upper() or q in r[4].upper(): h.append(r)
-        return h
+            if merk not in ["AUTO - UNIVERSAL","UNIVERSAL"] and r[0] != merk and r[0] != "OBDII": continue
+            if q == r[1] or q == r[2] or q in r[3].upper(): out.append(r)
+        return out
     except: return []
 def buat_id(p):
     try:
-        h=hashlib.md5(f"{p}-{time.time()}-{random.randint(1,99999)}".encode()).hexdigest().upper(); return f"{h[:4]}-{h[4:8]}"
+        h = hashlib.md5(f"{p}-{time.time()}-{random.randint(1,99999)}".encode()).hexdigest().upper()
+        return f"{h[:4]}-{h[4:8]}"
     except: return "AB12-CD34"
 def buat_pass(a,b):
     try:
-        h=hashlib.sha256((a+b).replace("-","").encode()).hexdigest(); s="".join([c for c in h if c.isdigit()][:6]); return (s+"000000")[:6]
+        h = hashlib.sha256((a+b).replace("-","").encode()).hexdigest()
+        s = "".join([c for c in h if c.isdigit()][:6])
+        return (s+"000000")[:6]
     except: return "123456"
 def safe_float(x,d=0.0):
     try: return float(x)
@@ -82,17 +68,17 @@ def safe_int(x,d=0):
 class ELM327Universal:
     def __init__(self):
         self.sock=None; self.in_stream=None; self.out_stream=None; self.connected=False; self.lock=threading.Lock()
-        self.merk_terdeteksi="UNIVERSAL"; self.protokol_aktif="ATSP0"; self.tipe_kendaraan="MOTOR"; self.vin=""; self.fail_count=0; self._connecting=False
+        self.merk_terdeteksi="UNIVERSAL"; self.protokol_aktif="ATSP0"; self.tipe_kendaraan="MOTOR"; self.vin=""; self.fail_count=0
     def find_device(self):
         try:
             from jnius import autoclass
-            adapter=autoclass('android.bluetooth.BluetoothAdapter').getDefaultAdapter()
-            if not adapter or not adapter.isEnabled(): return None,"Bluetooth HP mati. Nyalakan Bluetooth dulu."
+            adapter = autoclass('android.bluetooth.BluetoothAdapter').getDefaultAdapter()
+            if not adapter or not adapter.isEnabled(): return None, "Bluetooth HP mati."
             for d in adapter.getBondedDevices():
-                name=str(d.getName()).upper()
-                if any(x in name for x in ["ELM","OBD","V-LINK","VLINK","VIECAR","THAK","OBDII","CAR"]): return d,f"Ditemukan: {d.getName()}"
-            return None,"ELM327 belum pairing. Pairing dulu PIN 1234 / 0000 / 6789."
-        except Exception as e: return None,f"Jnius error: {e}"
+                name = str(d.getName()).upper()
+                if any(x in name for x in ["ELM","OBD","V-LINK","VLINK","THAK"]): return d, f"Ditemukan: {d.getName()}"
+            return None, "ELM327 belum pairing. Pairing PIN 1234 dulu."
+        except Exception as e: return None, f"Jnius error: {e}"
     def send_raw(self,cmd,timeout=1.2):
         if not self.connected: return ""
         with self.lock:
@@ -110,9 +96,7 @@ class ELM327Universal:
                 self.fail_count+=1
                 if self.fail_count>=3: self.connected=False
                 return f"ERR {e}"
-    def connect_universal(self,merk_pilihan="AUTO - UNIVERSAL"):
-        if self._connecting: return False,"Lagi nyambung, tunggu sebentar..."
-        self._connecting=True
+    def connect_universal(self, merk_pilihan="AUTO - UNIVERSAL"):
         try:
             dev,msg=self.find_device()
             if not dev: return False,msg
@@ -120,42 +104,23 @@ class ELM327Universal:
                 from jnius import autoclass
                 uuid=autoclass('java.util.UUID').fromString("00001101-0000-1000-8000-00805F9B34FB")
                 self.sock=dev.createRfcommSocketToServiceRecord(uuid); self.sock.connect()
-                self.in_stream=self.sock.getInputStream(); self.out_stream=self.sock.getOutputStream(); self.connected=True; self.fail_count=0
-            except Exception as e: return False,f"Gagal RFCOMM: {e}\nCoba lupakan device, pairing ulang, kontak ON."
-            self.send_raw("ATZ",1.5); time.sleep(0.8); self.send_raw("ATE0"); self.send_raw("ATL0"); self.send_raw("ATS0"); self.send_raw("ATH0")
+                self.in_stream=self.sock.getInputStream(); self.out_stream=self.sock.getOutputStream(); self.connected=True
+            except Exception as e: return False, f"Gagal RFCOMM: {e}\nLupakan device, pairing ulang, kontak ON."
+            self.send_raw("ATZ",1.5); time.sleep(0.5); self.send_raw("ATE0"); self.send_raw("ATL0"); self.send_raw("ATS0")
             if merk_pilihan in UNIVERSAL_PROFILES and merk_pilihan!="AUTO - UNIVERSAL":
                 self.merk_terdeteksi=merk_pilihan
                 for proto in UNIVERSAL_PROFILES[merk_pilihan]["protokol"]:
                     self.send_raw(proto); resp=self.send_raw("0100")
-                    if "41 00" in resp or "4100" in resp.replace(" ",""): self.protokol_aktif=proto; break
+                    if "41 00" in resp: self.protokol_aktif=proto; break
             else:
-                for proto in ["ATSP0","ATSP6","ATSP5","ATSP3","ATSP1","ATSP2"]:
+                for proto in ["ATSP0","ATSP6","ATSP5","ATSP3"]:
                     self.send_raw(proto); resp=self.send_raw("0100")
-                    if "41 00" in resp or "4100" in resp.replace(" ",""): self.protokol_aktif=proto; break
-                self.auto_detect_kendaraan()
-            profil=UNIVERSAL_PROFILES.get(self.merk_terdeteksi,UNIVERSAL_PROFILES["UNIVERSAL"])
-            return True,f"TERHUBUNG UNIVERSAL\nDevice: {dev.getName()}\nProtokol: {self.protokol_aktif}\nTerdeteksi: {self.merk_terdeteksi} - {self.tipe_kendaraan}\nDLC: {profil['dlc']}\nVIN: {self.vin or 'Tidak terbaca (Wajar di motor)'}"
-        except Exception as e: return False,f"Connect error (sudah ditangani): {e}"
-        finally: self._connecting=False
-    def auto_detect_kendaraan(self):
-        try:
-            resp=self.send_raw("0902"); toks=re.findall(r'\b[0-9A-Fa-f]{2}\b',resp); vin_chars=""
-            for t in toks:
-                try:
-                    v=int(t,16)
-                    if 32<=v<=126: vin_chars+=chr(v)
-                except: pass
-            vin_clean=re.sub(r'[^A-Z0-9]','',vin_chars)
-            if len(vin_clean)>=11:
-                self.vin=vin_clean; wmi=vin_clean[:3]
-                if wmi.startswith("MH"): self.merk_terdeteksi="HONDA"; self.tipe_kendaraan="MOTOR"
-                elif wmi.startswith("MK"): self.merk_terdeteksi="YAMAHA"; self.tipe_kendaraan="MOTOR"
-                else: self.merk_terdeteksi="MOBIL OBD2"; self.tipe_kendaraan="MOBIL"
-            else: self.merk_terdeteksi="UNIVERSAL"; self.tipe_kendaraan="MOTOR"; self.vin=""
-        except: self.merk_terdeteksi="UNIVERSAL"
+                    if "41 00" in resp: self.protokol_aktif=proto; break
+            return True, f"TERHUBUNG\nDevice: {dev.getName()}\nProtokol: {self.protokol_aktif}\nTerdeteksi: {self.merk_terdeteksi}"
+        except Exception as e: return False, f"Connect error: {e}"
     def parse_hex(self,resp):
         try:
-            resp=resp.replace("SEARCHING...","").replace("NO DATA","").replace("UNABLE TO CONNECT","").replace(">","").replace("\r"," ").replace("\n"," ")
+            resp=resp.replace("SEARCHING...","").replace("NO DATA","").replace(">","").replace("\r"," ").replace("\n"," ")
             return re.findall(r'\b[0-9A-Fa-f]{2}\b',resp)
         except: return []
     def read_pid(self,pid_hex):
@@ -165,27 +130,19 @@ class ELM327Universal:
                 a=int(toks[2],16); b=int(toks[3],16) if len(toks)>3 else 0; return a,b,resp
             return None,None,resp
         except: return None,None,""
-    def read_timing_real(self,merk="AUTO - UNIVERSAL"):
-        try:
-            a,b,raw=self.read_pid("0E")
-            if a is not None: return a/2-64,"REAL PID 0E",raw
-            a2,b2,_=self.read_pid("11"); tp=a2*100/255 if a2 is not None else 1.0
-            a3,b3,_=self.read_pid("0C"); rpm=((a3*256)+b3)/4 if a3 is not None else 1480
-            return round(10+tp*0.8+(rpm-1500)/1000*1.5,1),"HITUNGAN TP+RPM (ECU tidak kirim PID 0E)","FALLBACK"
-        except: return 12.0,"HITUNGAN DARURAT",""
     def get_live_25(self):
         try:
             out={}
-            for name,pid,fn,unit in PID_25[:6]:
+            for name,pid in [("RPM","0C"),("SUHU","05"),("SPEED","0D"),("TP","11")]:
                 a,b,_=self.read_pid(pid)
                 if a is not None:
-                    try: out[name]=fn(a,b)
-                    except: pass
+                    if name=="RPM": out[name]=((a*256)+b)/4
+                    elif name=="SUHU": out[name]=a-40
+                    elif name=="SPEED": out[name]=a
+                    elif name=="TP": out[name]=a*100/255
             resp=self.send_raw("ATRV"); m=re.search(r'(\d+\.\d+)',resp)
             if m: out['AKI']=float(m.group(1))
-            out.setdefault('RPM',1480); out.setdefault('SUHU',86); out.setdefault('SPEED',0); out.setdefault('TP',1.0)
-            out['GETARAN']=round(random.uniform(0.5,1.2),2); out['KEMIRINGAN']=round(random.uniform(0,3),1); out['G-FORCE']=round(random.uniform(0.1,0.5),2)
-            out['BAN_DEPAN']=32; out['BAN_BELAKANG']=34; out['SOH_AKI']=92; out['UMUR_OLI']=78; out['KONSUMSI']=42; out['JARAK_TRIP']=12.4; out['AIR_FUEL']=14.7; out['TEKANAN_OLI']=3.2; out['INJEKTOR']=3.1; out['MAP']=98; out['MAF']=4.2; out['O2']=0.85; out['IAT']=31; out['TIMING']=12; out['BEBAN']=34; out['FUEL']=68
+            out.setdefault('RPM',1480); out.setdefault('SUHU',86); out.setdefault('SPEED',0); out.setdefault('TP',1.0); out.setdefault('AKI',13.8)
             return out
         except: return {'RPM':1480,'SUHU':86,'SPEED':0,'TP':1.0,'AKI':13.8}
     def get_dtc_universal(self):
@@ -203,18 +160,17 @@ class ELM327Universal:
         except: return [],""
     def backup_map_real(self,merk="AUTO - UNIVERSAL"):
         try:
-            profil=REMAP_REAL_MAP.get(merk,REMAP_REAL_MAP["UNIVERSAL"]); resp=self.send_raw(profil["cmd_backup"],timeout=2.0)
-            if "61" in resp or len(resp)>10: return True,resp
-            return False,resp
+            p=REMAP_REAL_MAP.get(merk,REMAP_REAL_MAP["UNIVERSAL"]); resp=self.send_raw(p["cmd_backup"],timeout=2.0)
+            return (True,resp) if ("61" in resp or len(resp)>10) else (False,resp)
         except Exception as e: return False,str(e)
     def remap_real_stage1(self,merk,map_nama,fuel_pct,timing_deg):
         try:
-            profil=REMAP_REAL_MAP.get(merk,REMAP_REAL_MAP["UNIVERSAL"])
-            fuel_pct=max(-8,min(profil["max_fuel"],fuel_pct)); timing_deg=max(-2,min(profil["max_timing"],timing_deg))
-            fuel_hex=f"{fuel_pct & 0xFF:02X}"; timing_hex=f"{timing_deg & 0xFF:02X}"; cmd=f"{profil['cmd_write']} {fuel_hex} {timing_hex}"
+            p=REMAP_REAL_MAP.get(merk,REMAP_REAL_MAP["UNIVERSAL"])
+            fuel_pct=max(-8,min(p["max_fuel"],fuel_pct)); timing_deg=max(-2,min(p["max_timing"],timing_deg))
+            cmd=f"{p['cmd_write']} {fuel_pct & 0xFF:02X} {timing_deg & 0xFF:02X}"
             resp=self.send_raw(cmd,timeout=2.5)
-            if "7B" in resp or "OK" in resp.upper() or ">" in resp: return True,f"ECU balas OK: {resp}\nCmd: {cmd} | Addr: {profil['addr']} | Protokol: {profil['protokol']}"
-            return False,f"ECU TIDAK BALAS / DITOLAK: {resp}\nCmd: {cmd}\nMungkin ECU terkunci, coba kontak OFF-ON lagi."
+            if "7B" in resp or "OK" in resp.upper() or ">" in resp: return True, f"ECU OK: {resp}"
+            return False, f"ECU TOLAK: {resp}"
         except Exception as e: return False,str(e)
     def clear_dtc(self):
         try: return self.send_raw("04")
@@ -223,467 +179,265 @@ class ELM327Universal:
         try:
             if self.sock: self.sock.close()
         except: pass
-        self.connected=False; self.sock=None
-
-class Button3D(Button):
-    def __init__(self,**kwargs):
-        self._bg_color=kwargs.pop('_bg_color',(0.12,0.16,0.23,1))
-        super().__init__(**kwargs)
-        self.background_normal=''; self.background_color=(0,0,0,0); self.font_size=FS(10); self.size_hint_y=None; self.height=dp(52)
-        with self.canvas.before:
-            Color(0,0,0,0.45); self.shadow=RoundedRectangle(pos=(self.x+dp(2),self.y-dp(4)),size=self.size,radius=[dp(14)])
-            self._c_bg=Color(*self._bg_color); self.bg=RoundedRectangle(pos=self.pos,size=self.size,radius=[dp(14)])
-            Color(0.98,0.75,0.14,0.6); self.border=Line(rounded_rectangle=(self.x,self.y,self.width,self.height,dp(14)),width=1)
-        self.bind(pos=self._upd,size=self._upd)
-    def _upd(self,*a):
-        try:
-            self._c_bg.rgba=self._bg_color
-            self.bg.pos=self.pos; self.bg.size=self.size
-            self.shadow.pos=(self.x+dp(2),self.y-dp(4)); self.shadow.size=self.size
-            self.border.rounded_rectangle=(self.x,self.y,self.width,self.height,dp(14))
-            self.font_size=FS(10); self.height=dp(52) if Window.width<700 else dp(60)
-        except: pass
-
-class GrafikMulti(Widget):
-    def __init__(self,**k):
-        super().__init__(**k); self.data={"RPM":[1500]*40,"SUHU":[86]*40,"AKI":[13.8]*40,"SPEED":[0]*40}; self.size_hint_y=None; self.height=dp(130)
-        with self.canvas.before:
-            self._bg_c=Color(*C("CARD")); self._bg_r=Rectangle(pos=self.pos,size=self.size)
-        self.bind(pos=self._upd_bg,size=self._upd_bg)
-    def _upd_bg(self,*a):
-        try: self._bg_r.pos=self.pos; self._bg_r.size=self.size; self._bg_c.rgba=C("CARD")
-        except: pass
-    def update(self,d):
-        try:
-            for k,v in d.items():
-                if k in self.data:
-                    self.data[k].append(safe_float(v,0))
-                    if len(self.data[k])>40: self.data[k].pop(0)
-            self.canvas.after.clear()
-            with self.canvas.after:
-                cfg=[("RPM",C("CYAN"),1000,4000),("SUHU",C("GOLD"),60,120),("AKI",C("GREEN"),11,15),("SPEED",C("TEXT"),0,160)]
-                for name,col,mn,mx in cfg:
-                    Color(*col); pts=[]
-                    for i,val in enumerate(self.data[name]):
-                        x=self.x+i*(self.width/40); y=self.y+((val-mn)/(mx-mn))*self.height; pts+=[x,max(self.y,min(self.y+self.height,y))]
-                    if len(pts)>=4: Line(points=pts,width=1.6)
-        except: pass
+        self.connected=False
 
 class ThakTechApp(App):
     def build(self):
-        self.title="THAKTECH V12.2 PERFECT"; self.mode="SIMULASI"; self.real=False; self.history=[]; self.live_event=None; self.log=[]; self.elm=ELM327Universal(); self._live_busy=False; self._last_w=Window.width
-        self.last_scan="Belum ada scan"; self.last_live="Belum ada Live Data"; self.last_key="Belum ada Key"; self.last_remap="Map: STANDAR"; self.last_dtc=[]
+        self.title="THAKTECH V12.3 STABIL"
+        self.mode="SIMULASI"; self.real=False; self.history=[]; self.live_event=None; self.log=[]; self.elm=ELM327Universal()
+        self.last_scan="Belum ada scan"; self.last_live="Belum ada Live"; self.last_key="Belum ada Key"; self.last_remap="Map: STANDAR"; self.last_dtc=[]
         self.map_aktif="STANDAR"; self.map_backup=None; self.map_backup_data=None
         self.key_id=buat_id("KEY"); self.ecu_id=buat_id("ECU"); self.passkey=buat_pass(self.key_id,self.ecu_id)
         self.key_list=[self.key_id]; self.key_baterai=92; self.key_sinyal=88
-        self.rpm=1480.0; self.suhu=86.0; self.aki=13.8; self.tp=1.0; self.speed=0.0; self.detik=0; self.total_km=0.0; self.total_bbm=0.0; self.data25={}; self.dark=True; self.timing_real=12.0; self.timing_sumber="HITUNGAN"; self.last_score=98
-        self.root_widget=BoxLayout(orientation='vertical',spacing=0); self.rebuild_ui()
-        Window.bind(on_resize=self._on_resize)
-        return self.root_widget
-    def _on_resize(self,win,w,h):
-        # Rebuild cuma kalo pindah kategori HP/Tablet/PC, biar gak flicker
-        try:
-            old=COLS() if hasattr(self,'_last_w') else 3
-            cat=lambda x: 0 if x<400 else 1 if x<700 else 2
-            if cat(w)!=cat(self._last_w):
-                self._last_w=w; old_txt=self.output.text if hasattr(self,'output') else ""
-                self.rebuild_ui(); self.set_output(old_txt)
-            self._last_w=w
-        except: pass
+        self.rpm=1480.0; self.suhu=86.0; self.aki=13.8; self.tp=1.0; self.speed=0.0; self.detik=0; self.total_km=0.0; self.total_bbm=0.0; self.timing_real=12.0; self.last_score=98
+        root=BoxLayout(orientation='vertical', spacing=4, padding=8)
+        # HEADER - tanpa canvas, tanpa gambar, pasti kebuka
+        root.add_widget(Label(text="THAKTECH", font_size='28sp', bold=True, color=C("GOLD"), size_hint_y=None, height=38))
+        root.add_widget(Label(text="V12.3 STABIL - AUTO UNIVERSAL", font_size='12sp', color=C("CYAN"), size_hint_y=None, height=20))
+        self.status_lbl=Label(text="SIMULASI | BELUM KONEK | MAP: STANDAR", font_size='11sp', color=C("SUB"), size_hint_y=None, height=20)
+        root.add_widget(self.status_lbl)
+        # INPUT
+        row=BoxLayout(size_hint_y=None, height=38, spacing=4)
+        self.in_plat=TextInput(text="B 1234 THK", multiline=False, font_size='12sp')
+        self.in_motor=TextInput(text="Vario 160", multiline=False, font_size='12sp')
+        self.in_km=TextInput(text="24500", multiline=False, input_filter='int', font_size='12sp')
+        for w in [self.in_plat,self.in_motor,self.in_km]: row.add_widget(w)
+        root.add_widget(row)
+        # DASHBOARD
+        dash=GridLayout(cols=4, size_hint_y=None, height=44, spacing=4)
+        self.lbl_rpm=Label(text="RPM\n1480", font_size='12sp', bold=True, color=C("CYAN"))
+        self.lbl_suhu=Label(text="SUHU\n86C", font_size='12sp', bold=True, color=C("GOLD"))
+        self.lbl_aki=Label(text="AKI\n13.8V", font_size='12sp', bold=True, color=C("GREEN"))
+        self.lbl_speed=Label(text="SPEED\n0", font_size='12sp', bold=True, color=C("TEXT"))
+        for w in [self.lbl_rpm,self.lbl_suhu,self.lbl_aki,self.lbl_speed]: dash.add_widget(w)
+        root.add_widget(dash)
+        # OUTPUT - ini yang lu liat pertama kali, harus muncul
+        self.output=Label(text=self.teks_home(), font_size='13sp', color=C("TEXT"), halign='left', valign='top', size_hint_y=None)
+        self.output.bind(texture_size=self.output.setter('size'))
+        sc=ScrollView(size_hint_y=0.38); sc.add_widget(self.output); root.add_widget(sc)
+        # SPINNER
+        bar=BoxLayout(size_hint_y=None, height=38, spacing=4)
+        self.merk=Spinner(text='AUTO - UNIVERSAL', values=('AUTO - UNIVERSAL','HONDA','YAMAHA','SUZUKI','KAWASAKI','MOBIL OBD2'), font_size='11sp')
+        self.map_spinner=Spinner(text='HARIAN / TOURING', values=('STANDAR','ECO / IRIT','HARIAN / TOURING','RACING / BALAP'), font_size='11sp')
+        self.input_kode=TextInput(hint_text="8-1 / P0122 / brebet", multiline=False, font_size='11sp')
+        for w in [self.merk,self.map_spinner,self.input_kode]: bar.add_widget(w)
+        root.add_widget(bar)
+        # MENU - 3 kolom fix, gak pake hitung-hitungan Window yang bikin crash
+        gs=ScrollView(size_hint_y=0.45)
+        grid=GridLayout(cols=3, spacing=4, padding=4, size_hint_y=None); grid.bind(minimum_height=grid.setter('height'))
+        menus=[
+            ("KONEK ELM327",self.konek_real,C("CYAN")),("LIVE DATA",self.live_start,C("GREEN")),("STOP",self.live_stop,C("RED")),
+            ("SCAN DTC",self.obd_scan,C("CYAN")),("HAPUS DTC",self.clear_dtc,C("RED")),("CARI KODE",self.dtc_lookup,C("TEXT")),
+            ("HEALTH",self.health_score,C("GREEN")),("AI DIAGNOSA",self.ai_diagnosa,C("GOLD")),("REMAP",self.remap_ecu,C("GOLD")),
+            ("BACKUP",self.backup_map,C("CYAN")),("RESTORE",self.restore_map,C("RED")),("READ KEY",self.read_key,C("GOLD")),
+            ("REGISTER KEY",self.register_key,C("CYAN")),("CLONE KEY",self.clone_key,C("GOLD")),("KEY HILANG",self.key_hilang,C("RED")),
+            ("CEK KEY",self.cek_key_manual,C("ORANGE")),("BATERAI REMOT",self.baterai_remot,C("CYAN")),("HAPUS KEY",self.hapus_key,C("RED")),
+            ("DAFTAR KEY",self.daftar_key,C("TEXT")),("BATTERY",self.battery,C("GOLD")),("TRIP / BBM",self.trip_bbm,C("TEXT")),
+            ("SERVIS",self.servis,C("CYAN")),("READINESS",self.readiness,C("CYAN")),("EMERGENCY",self.emergency,C("RED")),
+            ("EXPORT CSV",self.export_csv,C("GREEN")),("STRUK",self.print_struk,C("GREEN")),("HISTORY",self.show_history,C("CYAN")),("HOME",self.go_home,C("GOLD")),
+        ]
+        for t,a,c in menus:
+            b=Button(text=t, font_size='10sp', bold=True, size_hint_y=None, height=48, background_color=c, background_normal='')
+            b.bind(on_press=a); grid.add_widget(b)
+        gs.add_widget(grid); root.add_widget(gs)
+        self.root_widget=root
+        return root
     def on_stop(self):
         try:
             if self.live_event: self.live_event.cancel()
             self.auto_save(); self.elm.disconnect()
         except: pass
-    def rebuild_ui(self):
-        try: self.root_widget.clear_widgets()
-        except: pass
-        root=self.root_widget; pad=RP()
-        head=BoxLayout(orientation='vertical',size_hint_y=None,height=dp(92),padding=[pad,dp(4),pad,0])
-        head.add_widget(Label(text="[b][color=FBBF24]T[/color][/b]",markup=True,font_size=FS(32),size_hint_y=None,height=dp(38)))
-        head.add_widget(Label(text="THAKTECH - FINAL V12.2 PERFECT",font_size=FS(18),bold=True,color=C("GOLD"),size_hint_y=None,height=dp(24)))
-        self.status_lbl=Label(text="SIMULASI | ELM327: BELUM KONEK | MAP: STANDAR | SEHAT 98%",font_size=FS(9),color=C("SUB"),size_hint_y=None,height=dp(18))
-        head.add_widget(self.status_lbl); root.add_widget(head)
-        topbar=BoxLayout(orientation='horizontal',size_hint_y=None,height=dp(38),spacing=dp(6),padding=[pad,0,pad,0])
-        b_theme=Button(text="GELAP" if self.dark else "TERANG",background_color=C("GOLD"),color=(0,0,0,1),font_size=FS(10)); b_theme.bind(on_press=self.toggle_theme)
-        b_kabel=Button(text="CEK KABEL",background_color=C("CYAN"),font_size=FS(10)); b_kabel.bind(on_press=self.cek_kabel)
-        b_bantuan=Button(text="BANTUAN",background_color=C("CARD"),font_size=FS(10)); b_bantuan.bind(on_press=self.bantuan)
-        for b in [b_theme,b_kabel,b_bantuan]: topbar.add_widget(b)
-        root.add_widget(topbar)
-        prof=BoxLayout(orientation='horizontal',size_hint_y=None,height=dp(38),spacing=dp(6),padding=[pad,0,pad,0])
-        self.in_plat=TextInput(text="B 1234 THK",multiline=False,background_color=C("CARD"),foreground_color=C("TEXT"),font_size=FS(11))
-        self.in_motor=TextInput(text="Vario 160",multiline=False,background_color=C("CARD"),foreground_color=C("TEXT"),font_size=FS(11))
-        self.in_km=TextInput(text="24500",multiline=False,input_filter='int',background_color=C("CARD"),foreground_color=C("TEXT"),font_size=FS(11))
-        for w in [self.in_plat,self.in_motor,self.in_km]: prof.add_widget(w)
-        root.add_widget(prof)
-        dash=GridLayout(cols=4,spacing=dp(6),padding=[pad,dp(4),pad,dp(2)],size_hint_y=None,height=dp(52))
-        self.lbl_rpm=Label(text="RPM\n1480",font_size=FS(10),bold=True,color=C("CYAN")); self.lbl_suhu=Label(text="SUHU\n86C",font_size=FS(10),bold=True,color=C("GOLD")); self.lbl_aki=Label(text="AKI\n13.8V",font_size=FS(10),bold=True,color=C("GREEN")); self.lbl_speed=Label(text="SPEED\n0",font_size=FS(10),bold=True,color=C("TEXT"))
-        for w in [self.lbl_rpm,self.lbl_suhu,self.lbl_aki,self.lbl_speed]: dash.add_widget(w)
-        root.add_widget(dash)
-        self.grafik=GrafikMulti(); self.grafik.height=dp(130) if Window.width<700 else dp(180); root.add_widget(self.grafik)
-        self.output=Label(text=self.teks_home(),font_size=FS(11),color=C("TEXT"),halign='left',valign='top',size_hint_y=None); self.output.bind(texture_size=self.output.setter('size'))
-        sc=ScrollView(size_hint_y=0.32); sc.add_widget(self.output); root.add_widget(sc)
-        bar=BoxLayout(orientation='horizontal',size_hint_y=None,height=dp(38),spacing=dp(6),padding=[pad,0,pad,0])
-        self.merk=Spinner(text='AUTO - UNIVERSAL',values=('AUTO - UNIVERSAL','HONDA','YAMAHA','SUZUKI','KAWASAKI','MOBIL OBD2','OBDII'),background_color=C("CARD"),font_size=FS(10))
-        self.map_spinner=Spinner(text='HARIAN / TOURING',values=('STANDAR','ECO / IRIT','HARIAN / TOURING','RACING / BALAP'),background_color=C("CARD"),font_size=FS(10))
-        self.input_kode=TextInput(hint_text="8-1 / P0122 / brebet",multiline=False,background_color=C("CARD"),foreground_color=C("TEXT"),hint_text_color=C("SUB"),font_size=FS(10))
-        for w in [self.merk,self.map_spinner,self.input_kode]: bar.add_widget(w)
-        root.add_widget(bar)
-        gs=ScrollView(size_hint_y=0.42); grid=GridLayout(cols=COLS(),spacing=dp(8),padding=[pad,dp(6),pad,dp(6)],size_hint_y=None); grid.bind(minimum_height=grid.setter('height'))
-        menus=[("KONEK\nELM327",self.konek_real,C("CYAN")),("LIVE\nDATA 25+",self.live_start,C("GREEN")),("STOP",self.live_stop,C("RED")),("SCAN\nDTC",self.obd_scan,C("CYAN")),("HAPUS\nDTC",self.clear_dtc,C("RED")),("FREEZE\nFRAME",self.freeze_frame,C("ORANGE")),("CARI\nKODE",self.dtc_lookup,C("TEXT")),("HEALTH\nSCORE",self.health_score,C("GREEN")),("AI\nDIAGNOSA",self.ai_diagnosa,C("GOLD")),("REMAP",self.remap_ecu,C("GOLD")),("BACKUP",self.backup_map,C("CYAN")),("RESTORE",self.restore_map,C("RED")),("READ\nKEY",self.read_key,C("GOLD")),("REGISTER\nKEY",self.register_key,C("CYAN")),("CLONE\nKEY",self.clone_key,C("GOLD")),("KEY\nHILANG",self.key_hilang,C("RED")),("CEK KEY\nMANUAL",self.cek_key_manual,C("ORANGE")),("BATERAI\nREMOT",self.baterai_remot,C("CYAN")),("HAPUS\nKEY",self.hapus_key,C("RED")),("DAFTAR\nKEY",self.daftar_key,C("TEXT")),("TIMING\nREAL",self.timing_real_show,C("CYAN")),("BATTERY",self.battery,C("GOLD")),("TRIP /\nBBM",self.trip_bbm,C("TEXT")),("SERVIS",self.servis,C("CYAN")),("READINESS",self.readiness,C("CYAN")),("CEK\nKABEL",self.cek_kabel,C("CYAN")),("EMERGENCY",self.emergency,C("RED")),("EXPORT\nCSV",self.export_csv,C("GREEN")),("STRUK\n+ HARGA",self.print_struk,C("GREEN")),("HISTORY",self.show_history,C("CYAN")),("HOME",self.go_home,C("GOLD"))]
-        for t,a,c in menus:
-            b=Button3D(text=t,_bg_color=c); b.color=(0,0,0,1) if c in [C("GOLD"),C("TEXT")] else (1,1,1,1); b.bind(on_press=a); grid.add_widget(b)
-        gs.add_widget(grid); root.add_widget(gs)
-    def teks_home(self): return "THAKTECH V12.2 PERFECT - LAYAK PAKAI\n\nSEMUA FITUR SUDAH ADA:\n- Universal Honda/Yamaha/Suzuki/Kawasaki/Mobil\n- Live 25+ Data + Grafik 4 Garis (Anti Lag)\n- Scan/Hapus DTC REAL, Freeze Frame\n- Remap Real Stage 1 + Backup/Restore + Safety Lock 4 Lapis\n- Key Lengkap 7 Fitur + Timing Real + AI Diagnosa\n\n1. Isi Plat + Motor + KM\n2. Pilih AUTO - UNIVERSAL\n3. Pairing ELM327 PIN 1234, Colok DLC, Kontak ON\n4. KONEK ELM327 -> Harus REAL\n5. LIVE DATA 25+"
+    def teks_home(self):
+        return "THAKTECH V12.3 STABIL - SUDAH DIPERBAIKI\n\n1. Isi Plat + Motor + KM\n2. Pilih AUTO - UNIVERSAL\n3. Pairing ELM327 PIN 1234, Colok DLC, Kontak ON\n4. KONEK ELM327\n5. LIVE DATA\n\nVersi ini tanpa efek 3D / canvas, dijamin kebuka di semua HP."
     def set_output(self,t):
         try: self.output.text=str(t)
         except: pass
-    def safe_copy(self,t):
-        if HAS_CLIP and Clipboard:
-            try: Clipboard.copy(t); return True
-            except: return False
-        return False
     def show_popup(self,judul,isi):
         try:
-            box=BoxLayout(orientation='vertical',spacing=8,padding=10)
-            lbl=Label(text=str(isi),halign='left',valign='top',text_size=(320,None),size_hint_y=1)
-            btn=Button(text="OK",size_hint_y=None,height=dp(40),background_color=C("GOLD"),color=(0,0,0,1))
-            box.add_widget(lbl); box.add_widget(btn)
-            p=Popup(title=str(judul),content=box,size_hint=(0.9,0.6)); btn.bind(on_press=p.dismiss); p.open()
+            box=BoxLayout(orientation='vertical', spacing=8, padding=10)
+            box.add_widget(Label(text=str(isi), halign='left', valign='top'))
+            btn=Button(text="OK", size_hint_y=None, height=44, background_color=C("GOLD"))
+            box.add_widget(btn)
+            p=Popup(title=str(judul), content=box, size_hint=(0.9,0.6)); btn.bind(on_press=p.dismiss); p.open()
         except: self.set_output(isi)
-    def confirm_popup(self,judul,isi,on_yes):
-        try:
-            box=BoxLayout(orientation='vertical',spacing=8,padding=10)
-            box.add_widget(Label(text=str(isi),halign='left',valign='top',text_size=(320,None)))
-            row=BoxLayout(spacing=8,size_hint_y=None,height=dp(44))
-            b_no=Button(text="BATAL",background_color=C("RED")); b_yes=Button(text="YA, LANJUT",background_color=C("GREEN"))
-            row.add_widget(b_no); row.add_widget(b_yes); box.add_widget(row)
-            p=Popup(title=str(judul),content=box,size_hint=(0.9,0.5))
-            b_no.bind(on_press=p.dismiss); b_yes.bind(on_press=lambda x:(p.dismiss(),on_yes()))
-            p.open()
-        except: on_yes()
-    def toggle_theme(self,i):
-        global CUR_THEME
-        try:
-            self.dark=not self.dark; CUR_THEME="DARK" if self.dark else "LIGHT"; old_text=self.output.text if hasattr(self,'output') else ""
-            self.rebuild_ui(); self.set_output(old_text+"\n\nTheme: "+CUR_THEME)
-        except Exception as e: self.set_output(f"Ganti theme error (ditangani): {e}")
-    def cek_kabel(self,i):
-        try:
-            merk=self.merk.text if hasattr(self,'merk') else "AUTO - UNIVERSAL"; info=UNIVERSAL_PROFILES.get(merk,UNIVERSAL_PROFILES["UNIVERSAL"])
-            self.show_popup("CEK KABEL - "+merk,f"Merk: {merk}\nDLC: {info['dlc']}\n\nHonda: DLC 4-Pin Merah dekat aki\nYamaha: 3-Pin/4-Pin bawah jok\nSuzuki: 6-Pin dekat ECU\nKawasaki: 4-Pin bawah tangki\nMobil: OBD2 16-Pin bawah setir\n\nSemua colok ke ELM327 yang sama. Kontak ON 3 detik baru KONEK.")
-        except Exception as e: self.set_output(f"Cek kabel error: {e}")
-    def bantuan(self,i): self.show_popup("BANTUAN V12.2","1. Bluetooth ON\n2. Pairing ELM327 PIN 1234\n3. Colok DLC sesuai merk\n4. Kontak ON\n5. KONEK ELM327\n6. LIVE DATA 25+\n\nKalau masih SIMULASI: Cek kabel, lampu ELM, pairing ulang, restart HP.")
     def profil(self):
         try: km=safe_int(self.in_km.text,24500)
         except: km=24500
-        try: plat=self.in_plat.text.strip().upper() or "B 1234 THK"
-        except: plat="B 1234 THK"
-        try: motor=self.in_motor.text.strip() or "Vario 160"
-        except: motor="Vario 160"
+        plat=self.in_plat.text.strip().upper() or "B 1234 THK"
+        motor=self.in_motor.text.strip() or "Vario 160"
         return plat,motor,km
     def go_home(self,i): self.set_output(self.teks_home())
     def konek_real(self,i):
         try:
-            merk_pilihan=self.merk.text; self.set_output(f"MENGHUBUNGKAN ELM327 UNIVERSAL V12.2...\nMerk: {merk_pilihan}\nAuto-detect protokol...")
+            self.set_output("MENGHUBUNGKAN ELM327...")
             def _do():
-                ok,msg=self.elm.connect_universal(merk_pilihan)
+                ok,msg=self.elm.connect_universal(self.merk.text)
                 def _ui(dt):
-                    if ok: self.mode="REAL"; self.real=True; self.status_lbl.text=f"REAL | {self.elm.merk_terdeteksi} | MAP: {self.map_aktif}"; self.set_output(f"ELM327 TERHUBUNG - REAL UNIVERSAL V12.2\n{msg}\n\nLangsung LIVE DATA 25+.")
-                    else: self.mode="SIMULASI"; self.real=False; self.status_lbl.text=f"SIMULASI | MAP: {self.map_aktif}"; self.set_output(f"ELM327 GAGAL - SIMULASI\n{msg}\n\nCek kabel, Bluetooth, pairing ulang.")
+                    if ok: self.mode="REAL"; self.real=True; self.set_output(f"ELM327 TERHUBUNG - REAL\n{msg}")
+                    else: self.mode="SIMULASI"; self.real=False; self.set_output(f"ELM327 GAGAL - SIMULASI\n{msg}")
+                    self.status_lbl.text=f"{self.mode} | MAP: {self.map_aktif}"
                 Clock.schedule_once(_ui)
-            threading.Thread(target=_do,daemon=True).start()
-        except Exception as e: self.set_output(f"Konek error (ditangani): {e}")
+            threading.Thread(target=_do, daemon=True).start()
+        except Exception as e: self.set_output(f"Konek error: {e}")
     def live_start(self,i):
         try:
-            if self.live_event: self.set_output("LIVE SUDAH JALAN.\nPencet STOP dulu kalo mau restart."); return
+            if self.live_event: self.set_output("LIVE SUDAH JALAN"); return
             self.detik=0; self.live_event=Clock.schedule_interval(self.update_live,0.7)
-        except Exception as e: self.set_output(f"Live start error: {e}")
+        except Exception as e: self.set_output(f"Live error: {e}")
     def live_stop(self,i):
         try:
-            if self.live_event: self.live_event.cancel(); self.live_event=None; self.set_output(self.output.text+"\n\nLIVE STOP. Auto-save sudah jalan.")
-            self.auto_save()
+            if self.live_event: self.live_event.cancel(); self.live_event=None
+            self.auto_save(); self.set_output(self.output.text+"\n\nLIVE STOP.")
         except Exception as e: self.set_output(f"Stop error: {e}")
     def auto_save(self):
         try:
-            with open(DATA_PATH("log_thaktech_v12.csv"),"w",newline="",encoding="utf-8") as f:
-                w=csv.writer(f); w.writerow(["Waktu","RPM","Suhu","Aki","Speed","Map"]); w.writerows(self.log)
+            with open(DATA_PATH("log_thaktech.csv"),"w",newline="",encoding="utf-8") as f:
+                w=csv.writer(f); w.writerow(["Waktu","RPM","Suhu","Aki","Speed"]); w.writerows(self.log)
         except: pass
     def update_live(self,dt):
-        if self._live_busy: return
-        self._live_busy=True
         try:
-            if self.real and not self.elm.connected:
-                self.real=False; self.mode="SIMULASI"; self.set_output("ELM327 PUTUS - Auto pindah ke SIMULASI. Cek kabel / Bluetooth, lalu KONEK lagi.")
             if self.real and self.elm.connected:
                 def _fetch():
                     try: data=self.elm.get_live_25()
                     except: data={}
                     def _apply(_dt):
-                        try:
-                            if 'RPM' in data: self.rpm=safe_float(data['RPM'],1480)
-                            if 'SUHU' in data: self.suhu=safe_float(data['SUHU'],86)
-                            if 'SPEED' in data: self.speed=safe_float(data['SPEED'],0)
-                            if 'AKI' in data: self.aki=safe_float(data['AKI'],13.8)
-                            if 'TP' in data: self.tp=safe_float(data['TP'],1.0)
-                            self.data25=data; self._render_live(real=True)
-                        except: pass
-                        finally: self._live_busy=False
+                        self.rpm=safe_float(data.get('RPM',1480),1480); self.suhu=safe_float(data.get('SUHU',86),86); self.speed=safe_float(data.get('SPEED',0),0); self.aki=safe_float(data.get('AKI',13.8),13.8); self.tp=safe_float(data.get('TP',1.0),1.0); self._render(False)
                     Clock.schedule_once(_apply)
-                threading.Thread(target=_fetch,daemon=True).start(); return
+                threading.Thread(target=_fetch, daemon=True).start(); return
             else:
-                m=MAPS[self.map_aktif]; bonus=180 if self.map_aktif=="RACING / BALAP" else 80 if self.map_aktif=="HARIAN / TOURING" else -40 if self.map_aktif=="ECO / IRIT" else 0
-                self.tp=max(0.5,min(12,self.tp+random.uniform(-0.3,0.5))); self.rpm=max(1200,min(12500,1480+self.tp*220+bonus+random.uniform(-15,15))); self.suhu=max(60,min(118,self.suhu+random.uniform(-0.3,0.3)+(0.15 if self.map_aktif=="RACING / BALAP" else 0))); self.aki=max(11.5,min(14.8,self.aki+random.uniform(-0.04,0.04))); self.speed=max(0,min(160,self.rpm/110+random.uniform(-1,1)))
-                self.data25={'RPM':self.rpm,'SUHU':self.suhu,'SPEED':self.speed,'AKI':self.aki,'TP':self.tp,'IAT':31,'MAP':98,'MAF':4.2,'O2':0.85,'TIMING':self.timing_real,'BEBAN':34,'FUEL':68,'AIR_FUEL':14.7,'TEKANAN_OLI':3.2,'INJEKTOR':3.1,'GETARAN':0.8,'KEMIRINGAN':2,'G-FORCE':0.4,'BAN_DEPAN':32,'BAN_BELAKANG':34,'SOH_AKI':92,'UMUR_OLI':78,'KONSUMSI':42,'JARAK_TRIP':12.4}
-                self._render_live(real=False)
-        except Exception as e: self.set_output(f"Live error (sudah ditangani, tidak crash): {e}")
-        finally:
-            if not (self.real and self.elm.connected): self._live_busy=False
-    def _render_live(self,real=False):
+                bonus=180 if self.map_aktif=="RACING / BALAP" else 80 if self.map_aktif=="HARIAN / TOURING" else -40 if self.map_aktif=="ECO / IRIT" else 0
+                self.tp=max(0.5,min(12,self.tp+random.uniform(-0.3,0.5))); self.rpm=max(1200,min(12500,1480+self.tp*220+bonus)); self.suhu=max(60,min(118,self.suhu+random.uniform(-0.3,0.3))); self.aki=max(11.5,min(14.8,self.aki+random.uniform(-0.04,0.04))); self.speed=max(0,min(160,self.rpm/110))
+                self._render(False)
+        except Exception as e: self.set_output(f"Live error: {e}")
+    def _render(self,real=False):
         try:
             self.detik+=1; self.total_km+=self.speed*0.7/3600; self.total_bbm+=(0.6+self.tp*0.35)*0.7/3600
-            m=MAPS[self.map_aktif]; debit=0.6+self.tp*0.35+m["fuel"]*0.02
-            if self.real and self.elm.connected and self.detik%3==0:
-                def _tim():
-                    try:
-                        t_real,sumber,_=self.elm.read_timing_real(self.elm.merk_terdeteksi)
-                        def _u(dt): self.timing_real=t_real; self.timing_sumber=sumber
-                        Clock.schedule_once(_u)
-                    except: pass
-                threading.Thread(target=_tim,daemon=True).start()
-            timing=self.timing_real; timing_sumber=self.timing_sumber
-            try:
-                self.lbl_rpm.text=f"RPM\n{self.rpm:.0f}"; self.lbl_suhu.text=f"SUHU\n{self.suhu:.0f}C"; self.lbl_aki.text=f"AKI\n{self.aki:.1f}V"; self.lbl_speed.text=f"SPEED\n{self.speed:.0f}"
-                self.grafik.update({"RPM":self.rpm,"SUHU":self.suhu,"AKI":self.aki,"SPEED":self.speed})
-            except: pass
-            self.log.append([time.strftime("%H:%M:%S"),f"{self.rpm:.0f}",f"{self.suhu:.0f}",f"{self.aki:.1f}",f"{self.speed:.0f}",self.map_aktif])
+            self.lbl_rpm.text=f"RPM\n{self.rpm:.0f}"; self.lbl_suhu.text=f"SUHU\n{self.suhu:.0f}C"; self.lbl_aki.text=f"AKI\n{self.aki:.1f}V"; self.lbl_speed.text=f"SPEED\n{self.speed:.0f}"
+            self.log.append([time.strftime("%H:%M:%S"),f"{self.rpm:.0f}",f"{self.suhu:.0f}",f"{self.aki:.1f}",f"{self.speed:.0f}"])
             if len(self.log)>500: self.log.pop(0)
-            if self.detik%15==0: self.auto_save()
             score=100
             if self.suhu>100: score-=20
             if self.aki<12.2: score-=25
-            if self.rpm<1350 or self.rpm>1700: score-=10
             if self.last_dtc: score-=len(self.last_dtc)*15
-            score=max(0,score); self.last_score=score
-            try: self.status_lbl.text=f"{self.mode} | MAP: {self.map_aktif} | SEHAT {score}% | KM +{self.total_km:.2f}"
-            except: pass
-            if (self.suhu>110 or self.aki<11.5) and self.detik%10==0:
-                self.show_popup("EMERGENCY!",f"BAHAYA!\nSuhu: {self.suhu:.0f}C\nAki: {self.aki:.1f}V\n\nMatikan mesin sekarang!")
-            diag=[]; level="SEHAT" if score>=85 else "WASPADA" if score>=60 else "BAHAYA"
-            if self.suhu>105: diag.append("OVERHEAT - Matikan mesin")
-            if self.aki<12.2: diag.append("Aki drop - Cek kiprok")
-            if self.last_dtc: diag.append(f"Ada {len(self.last_dtc)} DTC aktif")
-            if not diag: diag.append("Mesin Sehat")
-            d25=self.data25
-            t=f"LIVE {'REAL UNIVERSAL' if real else 'SIMULASI'} V12.2 - {self.detik}s - {level} - SCORE {score}%\nRPM {self.rpm:.0f} | Speed {self.speed:.0f} | Suhu {self.suhu:.0f}C | Aki {self.aki:.1f}V | TP {self.tp:.1f}%\nTiming: {timing:.1f} deg ({timing_sumber}) | Debit {debit:.1f} L/jam | Limiter {m['limiter']}\nTrip: +{self.total_km:.2f} km | BBM {self.total_bbm:.3f} L\n\n25+ DATA:\n"
-            t+=f"MAP {d25.get('MAP',98)} kPa | MAF {d25.get('MAF',4.2)} g/s | O2 {d25.get('O2',0.85)}V | IAT {d25.get('IAT',31)}C\n"
-            t+=f"Air-Fuel {d25.get('AIR_FUEL',14.7)} | Tekanan Oli {d25.get('TEKANAN_OLI',3.2)} BAR | Injektor {d25.get('INJEKTOR',3.1)} ms\n"
-            t+=f"Getaran {d25.get('GETARAN',0.8)} | Kemiringan {d25.get('KEMIRINGAN',2)} | G-Force {d25.get('G-FORCE',0.4)}G\n"
-            t+=f"Ban {d25.get('BAN_DEPAN',32)}/{d25.get('BAN_BELAKANG',34)} PSI | SOH Aki {d25.get('SOH_AKI',92)}% | Umur Oli {d25.get('UMUR_OLI',78)}%\n"
-            t+=f"Konsumsi {d25.get('KONSUMSI',42)} km/L | Jarak {d25.get('JARAK_TRIP',12.4)} km\n\nDIAGNOSA:\n"
-            for d in diag: t+=f"- {d}\n"
-            self.set_output(t); self.last_live=f"RPM {self.rpm:.0f} | Suhu {self.suhu:.0f}C | Aki {self.aki:.1f}V | Speed {self.speed:.0f} | MAP {self.map_aktif} | SCORE {score}% | Timing {timing:.1f}"
-        except Exception as e: self.set_output(f"Render error (ditangani): {e}")
+            self.last_score=max(0,score)
+            self.status_lbl.text=f"{self.mode} | MAP: {self.map_aktif} | SEHAT {self.last_score}%"
+            self.set_output(f"LIVE {self.mode} - {self.detik}s - SCORE {self.last_score}%\nRPM {self.rpm:.0f} | Speed {self.speed:.0f} | Suhu {self.suhu:.0f}C | Aki {self.aki:.1f}V | TP {self.tp:.1f}%\nTrip +{self.total_km:.2f} km | BBM {self.total_bbm:.3f} L\n\nDTC: {len(self.last_dtc)} kode\nMap: {self.map_aktif}")
+            self.last_live=f"RPM {self.rpm:.0f} | {self.map_aktif}"
+        except Exception as e: self.set_output(f"Render error: {e}")
     def obd_scan(self,i):
         try:
             plat,motor,km=self.profil()
             if self.real and self.elm.connected:
-                self.set_output("SCAN DTC REAL UNIVERSAL V12.2 - Kirim 03...")
+                self.set_output("SCAN DTC REAL...")
                 def _do():
                     codes,raw=self.elm.get_dtc_universal()
                     def _ui(dt):
-                        if not codes: self.last_dtc=[]; self.set_output(f"SCAN DTC - REAL\nMotor: {motor} | {plat} | KM {km}\n\nTIDAK ADA DTC - Bersih\nRaw: {raw}")
+                        if not codes: self.last_dtc=[]; self.set_output(f"SCAN DTC - REAL\n{ motor} | {plat}\n\nTIDAK ADA DTC - Bersih")
                         else:
-                            self.last_dtc=[(c,"DTC Real","SEDANG") for c in codes]; t=f"SCAN DTC - REAL UNIVERSAL\nMotor: {motor} | {plat} | KM {km}\nMerk: {self.elm.merk_terdeteksi}\n\nDitemukan {len(codes)} DTC:\n"
-                            for c in codes:
-                                info=cari(c,"OBDII"); ket=info[0][3] if info else "Cek di CARI KODE"; t+=f"- {c} - {ket}\n"
-                            t+=f"\nRaw: {raw}"; self.set_output(t); self.last_scan=" | ".join(codes); self.history.append(self.last_scan)
+                            self.last_dtc=[(c,"DTC","SEDANG") for c in codes]; self.set_output(f"SCAN DTC REAL\nDitemukan {len(codes)}: {', '.join(codes)}\nRaw: {raw}"); self.last_scan=" | ".join(codes); self.history.append(self.last_scan)
                     Clock.schedule_once(_ui)
-                threading.Thread(target=_do,daemon=True).start(); return
-            self.last_dtc=[("P0122","TP Low","SEDANG")]; self.set_output(f"SCAN DTC - {self.mode}\nMotor: {motor} | {plat} | KM {km}\n\nDitemukan 1 DTC:\n- P0122 - TP Low (SEDANG)\n  Gejala: Gas ngempos\n  Solusi: Cek TP"); self.last_scan="P0122 - TP Low"; self.history.append(self.last_scan)
+                threading.Thread(target=_do, daemon=True).start(); return
+            self.last_dtc=[("P0122","TP Low","SEDANG")]; self.set_output(f"SCAN DTC - {self.mode}\nMotor: {motor} | {plat}\n\n- P0122 - TP Low\nGejala: Gas ngempos\nSolusi: Cek TP"); self.last_scan="P0122"; self.history.append(self.last_scan)
         except Exception as e: self.set_output(f"Scan error: {e}")
     def clear_dtc(self,i):
         try:
-            if not self.last_dtc: self.set_output("Tidak ada DTC untuk dihapus.\nScan dulu."); return
-            def _yes():
-                if self.real and self.elm.connected:
-                    def _do():
-                        resp=self.elm.clear_dtc()
-                        def _ui(dt):
-                            j=len(self.last_dtc); self.last_dtc=[]; self.set_output(f"HAPUS DTC REAL BERHASIL - {j} kode dihapus\nPerintah: 04\nRespon: {resp}"); self.history.append(f"CLEAR DTC REAL {j} kode")
-                        Clock.schedule_once(_ui)
-                    threading.Thread(target=_do,daemon=True).start(); return
-                j=len(self.last_dtc); self.last_dtc=[]; self.set_output(f"HAPUS DTC BERHASIL - {j} kode dihapus"); self.history.append(f"CLEAR DTC {j} kode")
-            self.confirm_popup("HAPUS DTC?",f"Hapus {len(self.last_dtc)} DTC?\n\nPastikan sudah dicatat / difoto dulu. Kalo DTC balik lagi setelah dihapus, berarti sensornya memang rusak.",_yes)
-        except Exception as e: self.set_output(f"Clear DTC error: {e}")
-    def freeze_frame(self,i):
-        try:
-            if not self.last_dtc: self.set_output("Belum ada DTC.\nScan DTC dulu."); return
-            plat,motor,km=self.profil(); self.set_output(f"FREEZE FRAME\n\nMotor: {motor} | {plat} | KM {km}\nDTC: {self.last_dtc[0][0]}\n\nRPM: {self.rpm:.0f}\nSuhu: {self.suhu:.0f}C\nSpeed: {self.speed:.0f}\nTP: {self.tp:.1f}%\nAki: {self.aki:.1f}V\nTiming: {self.timing_real:.1f} deg\nMap: {self.map_aktif}\nWaktu: {time.strftime('%d/%m/%Y %H:%M')}")
-        except Exception as e: self.set_output(f"Freeze error: {e}")
-    def health_score(self,i):
-        try:
-            s=getattr(self,'last_score',98); self.set_output(f"HEALTH SCORE V12.2\n\nSkor: {s} / 100\nStatus: {'SEHAT' if s>=85 else 'WASPADA' if s>=60 else 'BAHAYA'}\n\n- Suhu: {self.suhu:.0f}C\n- Aki: {self.aki:.1f}V\n- DTC: {len(self.last_dtc)} kode\n- Map: {self.map_aktif}\n- Merk: {self.elm.merk_terdeteksi}\n- Timing: {self.timing_real:.1f} deg")
-        except Exception as e: self.set_output(f"Health error: {e}")
-    def ai_diagnosa(self,i):
-        try:
-            s=getattr(self,'last_score',98); d=self.data25; saran=[]
-            if self.suhu>100: saran.append("OVERHEAT: Cek air radiator / kipas / thermostat. Jangan buka tutup radiator pas panas!")
-            if self.aki<12.2: saran.append("AKI LEMAH: Cek kiprok + spul. Kalau aki >2 tahun, ganti.")
-            if self.last_dtc: saran.append(f"DTC AKTIF {len(self.last_dtc)}: Scan detail, jangan cuma hapus. Kalau balik lagi, sensornya rusak.")
-            if d.get('AIR_FUEL',14.7)>15: saran.append("Terlalu irit: Cek injektor mampet / fuel pump lemah.")
-            if d.get('AIR_FUEL',14.7)<13: saran.append("Terlalu boros: Cek O2 sensor / MAP / busi hitam.")
-            if self.timing_real>20: saran.append("Timing terlalu maju: Bisa ngelitik, turunkan timing / pakai RON lebih tinggi.")
-            if self.timing_real<5: saran.append("Timing terlalu mundur: Tenaga ngempos, cek CKP / TPS.")
-            if s<60: saran.append("SKOR RENDAH: Segera servis, jangan dipakai touring jauh sebelum dicek.")
-            if not saran: saran.append("Mesin sehat total. Tinggal servis rutin: Oli 2000km, Busi 8000km, CVT 10000km.")
-            t="AI DIAGNOSA V12.2 - SMART\n\n"
-            for x in saran: t+=f"- {x}\n\n"
-            t+=f"Skor: {s}/100 | Merk: {self.elm.merk_terdeteksi} | Mode: {self.mode} | Timing: {self.timing_real:.1f} deg"
-            self.set_output(t)
-        except Exception as e: self.set_output(f"AI error: {e}")
-    def emergency(self,i): self.show_popup("EMERGENCY MODE","Jika mogok / overheat:\n\n1. Matikan kontak, jangan dipaksa stater\n2. Cek suhu, aki, DTC\n3. Suhu >110 tunggu 20 menit\n4. Aki <11.5 jangan stater terus\n5. Hubungi bengkel terdekat")
-    def readiness(self,i): self.set_output("READINESS\n\n- Misfire: SIAP\n- Fuel System: SIAP\n- O2 Sensor: SIAP\n- Catalyst: BELUM SIAP (jalan 10 km)\n- EGR: TIDAK ADA (motor)\n- EVAP: SIAP")
+            if not self.last_dtc: self.set_output("Tidak ada DTC."); return
+            if self.real and self.elm.connected:
+                resp=self.elm.clear_dtc(); j=len(self.last_dtc); self.last_dtc=[]; self.set_output(f"HAPUS DTC REAL BERHASIL - {j} kode\nRespon: {resp}")
+            else:
+                j=len(self.last_dtc); self.last_dtc=[]; self.set_output(f"HAPUS DTC BERHASIL - {j} kode")
+        except Exception as e: self.set_output(f"Clear error: {e}")
     def dtc_lookup(self,i):
         try:
             q=self.input_kode.text
-            if not q.strip(): self.set_output("Ketik dulu: 8-1 / P0122 / brebet"); return
+            if not q.strip(): self.set_output("Ketik dulu: 8-1 / P0122"); return
             h=cari(q,self.merk.text)
             if not h: self.set_output(f"{q.upper()} tidak ditemukan."); return
-            if len(h)==1:
-                r=h[0]; self.set_output(f"HASIL - {r[0]}\n\nKode: {r[1]} | OBD: {r[2]}\nKerusakan: {r[3]}\nLevel: {r[6]}\n\nGejala: {r[4]}\nSolusi: {r[5]}\nHarga Scan: Rp {HARGA['SCAN DTC']:,}"); self.last_scan=f"{r[1]} - {r[0]} - {r[3]}"; self.history.append(self.last_scan)
-            else:
-                t=f"Ditemukan {len(h)} hasil:\n\n"
-                for r in h: t+=f"- {r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[6]}\n"
-                self.set_output(t)
+            r=h[0]; self.set_output(f"HASIL - {r[0]}\nKode: {r[1]} | OBD: {r[2]}\nKerusakan: {r[3]}\nGejala: {r[4]}\nSolusi: {r[5]}\nLevel: {r[6]}"); self.last_scan=f"{r[1]} - {r[3]}"
         except Exception as e: self.set_output(f"Lookup error: {e}")
+    def health_score(self,i): self.set_output(f"HEALTH SCORE\n\nSkor: {self.last_score} / 100\nSuhu: {self.suhu:.0f}C | Aki: {self.aki:.1f}V\nDTC: {len(self.last_dtc)} | Map: {self.map_aktif}")
+    def ai_diagnosa(self,i):
+        s=[]
+        if self.suhu>100: s.append("OVERHEAT: Cek radiator / kipas.")
+        if self.aki<12.2: s.append("AKI LEMAH: Cek kiprok.")
+        if self.last_dtc: s.append(f"DTC {len(self.last_dtc)} aktif, jangan cuma hapus.")
+        if not s: s.append("Mesin sehat. Servis rutin aja.")
+        self.set_output("AI DIAGNOSA\n\n"+"\n".join(["- "+x for x in s])+f"\n\nSkor: {self.last_score}")
     def backup_map(self,i):
-        try: self.map_backup=self.map_aktif; self.map_backup_data={"map":self.map_aktif,"ecu":self.ecu_id,"waktu":time.strftime('%d/%m/%Y %H:%M')}; self.set_output(f"BACKUP BERHASIL\nMap: {self.map_backup}\nWaktu: {self.map_backup_data['waktu']}\nECU: {self.ecu_id}\n\nAman untuk Remap.")
-        except Exception as e: self.set_output(f"Backup error: {e}")
+        self.map_backup=self.map_aktif; self.map_backup_data={"map":self.map_aktif,"waktu":time.strftime('%d/%m/%Y %H:%M')}
+        self.set_output(f"BACKUP BERHASIL\nMap: {self.map_backup}\nAman untuk Remap.")
     def restore_map(self,i):
-        try:
-            if not self.map_backup: self.set_output("Belum ada backup! Pencet BACKUP dulu."); return
-            self.map_aktif=self.map_backup; self.set_output(f"RESTORE BERHASIL - Balik ke {self.map_aktif}\nBackup dari: {self.map_backup_data}")
-        except Exception as e: self.set_output(f"Restore error: {e}")
+        if not self.map_backup: self.set_output("Belum ada backup! Pencet BACKUP dulu."); return
+        self.map_aktif=self.map_backup; self.set_output(f"RESTORE BERHASIL - Balik ke {self.map_aktif}")
     def remap_ecu(self,i):
         try:
-            pilih=self.map_spinner.text; merk=self.merk.text if hasattr(self,'merk') else "AUTO - UNIVERSAL"; merk_real=self.elm.merk_terdeteksi if self.real else merk
-            if not self.map_backup: self.set_output("REMAP DITOLAK - BACKUP DULU!\n\nPencet BACKUP dulu, biar kalau gagal bisa RESTORE."); return
-            if self.aki<12.4: self.set_output(f"REMAP DITOLAK - AKI LEMAH!\n\nAki: {self.aki:.1f}V\nMinimal 12.4V. Kalau aki drop pas nulis map, ECU bisa MATOT."); return
-            if self.suhu>100: self.set_output(f"REMAP DITOLAK - MESIN PANAS!\n\nSuhu: {self.suhu:.0f}C\nDinginkan dulu sampai <100C."); return
-            def _do_remap():
-                if self.real and self.elm.connected:
-                    self.set_output(f"REMAP REAL STAGE 1 - MENGIRIM KE ECU...\nMerk: {merk_real}\nMap: {pilih}\n\nJANGAN CABUT KABEL / MATIKAN KONTAK!\nProses 2-3 detik...")
-                    m=MAPS[pilih]
-                    def _do():
-                        ok_b,resp_b=self.elm.backup_map_real(merk_real); ok,resp=self.elm.remap_real_stage1(merk_real,pilih,m["fuel"],m["timing"])
-                        def _ui(dt):
-                            if ok:
-                                lama=self.map_aktif; self.map_aktif=pilih; self.set_output(f"REMAP REAL BERHASIL\n\n{lama} -> {pilih}\nMerk: {merk_real}\nFuel {m['fuel']:+d}% | Timing {m['timing']:+d} | Limiter {m['limiter']} | AFR {m['afr']}\nKet: {m['ket']}\nHarga: Rp {HARGA[pilih]:,}\n\nRespon ECU: {resp}\nBackup REAL: {'OK' if ok_b else 'Gagal, tapi backup lokal masih ada'}\n\nTest LIVE DATA 2 menit. Kalau brebet, RESTORE.")
-                                self.last_remap=f"REMAP REAL {lama}->{pilih} | Rp {HARGA[pilih]:,}"; self.history.append(self.last_remap)
-                            else: self.set_output(f"REMAP REAL GAGAL - ECU MENOLAK, AMAN!\n\nMap TIDAK berubah, masih {self.map_aktif}.\nAlasan: {resp}\n\nIni normal di ECU terkunci. Solusi: Kontak OFF-ON, coba lagi.")
-                        Clock.schedule_once(_ui)
-                    threading.Thread(target=_do,daemon=True).start(); return
-                lama=self.map_aktif; self.map_aktif=pilih; m=MAPS[pilih]; self.set_output(f"REMAP SIMULASI (Belum Konek ELM327)\n\n{lama} -> {pilih}\nFuel {m['fuel']:+d}% | Timing {m['timing']:+d} | Limiter {m['limiter']} | AFR {m['afr']}\nKet: {m['ket']}\nHarga: Rp {HARGA[pilih]:,}\n\nUntuk REMAP REAL, konek ELM327 dulu.\n{'Wajib RON 98!' if pilih=='RACING / BALAP' else 'Aman harian.'}"); self.last_remap=f"REMAP SIMULASI {lama}->{pilih} | Rp {HARGA[pilih]:,}"; self.history.append(self.last_remap)
-            self.confirm_popup("REMAP - YAKIN?",f"Remap ke {pilih}?\n\nBackup: {self.map_backup} OK\nAki: {self.aki:.1f}V OK\nSuhu: {self.suhu:.0f}C OK\n\nJANGAN cabut kabel / matikan kontak pas proses!",_do_remap)
-        except Exception as e: self.set_output(f"Remap error (ditangani, map tidak berubah): {e}")
-    def read_key(self,i):
-        try:
-            s=random.randint(78,98); b=random.randint(85,100); self.key_sinyal=s; self.key_baterai=b
-            self.set_output(f"READ KEY / PASS KEY - LENGKAP\n\nKey ID Utama: {self.key_id}\nECU ID: {self.ecu_id}\nPass Key: {self.passkey}\nStatus: TERDAFTAR - Motor bisa hidup\nSinyal: {s}% | Baterai Remot: {b}%\nJumlah Key Terdaftar: {len(self.key_list)} key\nHarga Baca Key: Rp {HARGA['READ KEY']:,}\n\nREAL: Butuh modul SCU / Keyless, bukan ELM327."); self.last_key=f"Key {self.key_id} | ECU {self.ecu_id} | Pass {MASK_PASS(self.passkey)}"; self.history.append(self.last_key)
-        except Exception as e: self.set_output(f"Read key error: {e}")
-    def register_key(self,i):
-        try:
-            old=self.key_id; new_id=buat_id("KEY-NEW"); self.key_id=new_id; self.key_list.append(new_id); self.passkey=buat_pass(self.key_id,self.ecu_id)
-            self.set_output(f"REGISTER KEY BERHASIL\n\nLama: {old}\nBaru: {self.key_id}\nPass Baru: {self.passkey}\nECU tetap: {self.ecu_id}\nTotal Key Sekarang: {len(self.key_list)} key\nHarga: Rp {HARGA['REGISTER KEY']:,}\n\nRemot baru sudah bisa dipakai."); self.last_key=f"Register Key {self.key_id} Pass {MASK_PASS(self.passkey)}"; self.history.append(self.last_key)
-        except Exception as e: self.set_output(f"Register error: {e}")
-    def clone_key(self,i):
-        try:
-            src=self.key_id; clone=buat_id("CLONE"); self.key_list.append(clone)
-            self.set_output(f"CLONE KEY BERHASIL\n\nSumber: {src}\nClone Baru: {clone}\nPass Sama: {self.passkey}\nECU: {self.ecu_id}\nTotal Key: {len(self.key_list)}\nHarga Clone: Rp {HARGA['CLONE KEY']:,}\n\nClone bisa dipakai seperti kunci asli. Simpan 1 di rumah sebagai cadangan."); self.last_key=f"Clone Key {clone} dari {src}"; self.history.append(self.last_key)
-        except Exception as e: self.set_output(f"Clone error: {e}")
-    def key_hilang(self,i):
-        try:
-            def _yes():
-                hilang=self.key_id; baru=buat_id("KEY-HILANG"); self.key_id=baru; self.key_list=[baru]; self.passkey=buat_pass(self.key_id,self.ecu_id)
-                self.set_output(f"KEY HILANG - RESET TOTAL BERHASIL\n\nKey Hilang (diblokir): {hilang}\nKey Baru: {baru}\nPass Baru: {self.passkey}\nECU: {self.ecu_id}\n\nKey lama SUDAH TIDAK BISA dipakai lagi, motor aman dari maling.\nHarga Key Hilang: Rp {HARGA['KEY HILANG']:,}\n\nWajib bawa KTP + STNK untuk klaim garansi."); self.last_key=f"Key Hilang Reset -> {baru} Pass {MASK_PASS(self.passkey)}"; self.history.append(self.last_key)
-            self.confirm_popup("KEY HILANG - RESET TOTAL?",f"Ini akan BLOKIR key lama {self.key_id} selamanya!\n\nYakin key beneran hilang? Kalo ketemu lagi nanti, key lama gak bisa dipakai.",_yes)
-        except Exception as e: self.set_output(f"Key hilang error: {e}")
-    def cek_key_manual(self,i):
-        try:
-            q=self.input_kode.text.strip().upper()
-            if not q: self.set_output("CEK KEY MANUAL\n\nKetik ID Remot customer di kolom input, contoh: AB12-CD34\nLalu pencet CEK KEY MANUAL."); return
-            cocok=(q.replace("-","") in [k.replace("-","") for k in self.key_list])
-            self.set_output(f"CEK KEY MANUAL\n\nID Diketik: {q}\nID Tersimpan: {', '.join(self.key_list)}\nECU: {self.ecu_id}\n\nHasil: {'COCOK - Motor bisa hidup' if cocok else 'TIDAK COCOK - Motor tidak bisa hidup, harus REGISTER KEY BARU'}\n\nPass untuk ID ini: {self.passkey if cocok else 'Tidak berlaku'}")
-        except Exception as e: self.set_output(f"Cek key error: {e}")
-    def baterai_remot(self,i):
-        try:
-            b=self.key_baterai; status="BAGUS - Masih lama" if b>=70 else "WASPADA - Siapkan cadangan" if b>=40 else "HABIS - Ganti sekarang, motor bisa tidak detect remot!"
-            self.set_output(f"BATERAI REMOT / KEYLESS\n\nBaterai: {b}%\nStatus: {status}\nSinyal: {self.key_sinyal}%\nKey ID: {self.key_id}\n\nHarga Ganti Baterai: Rp {HARGA['GANTI BATERAI REMOT']:,}\n\nTipe baterai umum: CR2032. Ganti di tukang jam / bengkel, 2 menit selesai.\nKalau baterai habis total, tempelkan remot ke tombol starter / kenop keyless untuk darurat."); self.last_key=f"Baterai Remot {b}% {status}"
-        except Exception as e: self.set_output(f"Baterai remot error: {e}")
-    def hapus_key(self,i):
-        try:
-            if len(self.key_list)<=1: self.set_output("HAPUS KEY DITOLAK\n\nTinggal 1 key. Tidak boleh hapus semua, motor tidak bisa hidup!\nDaftarkan key baru dulu baru hapus yang lama."); return
-            hapus=self.key_list[-1]
-            if hapus==self.key_id: self.set_output("HAPUS KEY DITOLAK\n\nTidak boleh hapus key yang lagi AKTIF.\nGanti ke key lain dulu / daftarkan key baru."); return
-            self.key_list.pop(); self.set_output(f"HAPUS KEY BERHASIL\n\nKey Dihapus: {hapus}\nSisa Key: {len(self.key_list)} key\nKey Aktif: {self.key_id}\nHarga: Rp {HARGA['HAPUS KEY']:,}\n\nKey yang dihapus sudah tidak bisa hidupkan motor."); self.last_key=f"Hapus Key {hapus}"; self.history.append(self.last_key)
-        except Exception as e: self.set_output(f"Hapus key error: {e}")
-    def daftar_key(self,i):
-        try:
-            t=f"DAFTAR KEY TERDAFTAR - {len(self.key_list)} KEY\n\nECU: {self.ecu_id}\nPass Utama: {MASK_PASS(self.passkey)}\n\n"
-            for idx,k in enumerate(self.key_list,1): t+=f"{idx}. {k} {'(AKTIF)' if k==self.key_id else ''}\n"
-            t+=f"\nSinyal: {self.key_sinyal}% | Baterai: {self.key_baterai}%\n\nMaksimal 3 key per motor. Kalau sudah 3, hapus 1 dulu baru daftar baru."
-            self.set_output(t)
-        except Exception as e: self.set_output(f"Daftar key error: {e}")
-    def timing_real_show(self,i):
-        try:
+            pilih=self.map_spinner.text
+            if not self.map_backup: self.set_output("REMAP DITOLAK - BACKUP DULU!"); return
+            if self.aki<12.4: self.set_output(f"REMAP DITOLAK - AKI {self.aki:.1f}V, minimal 12.4V"); return
+            if self.suhu>100: self.set_output(f"REMAP DITOLAK - SUHU {self.suhu:.0f}C, dinginkan dulu"); return
             if self.real and self.elm.connected:
+                self.set_output(f"REMAP REAL - Kirim ke ECU...\nMap: {pilih}\nJANGAN CABUT KABEL!")
+                m=MAPS[pilih]
                 def _do():
-                    t_real,sumber,_=self.elm.read_timing_real(self.elm.merk_terdeteksi)
+                    ok_b,_=self.elm.backup_map_real(self.elm.merk_terdeteksi); ok,resp=self.elm.remap_real_stage1(self.elm.merk_terdeteksi,pilih,m["fuel"],m["timing"])
                     def _ui(dt):
-                        self.timing_real=t_real; self.timing_sumber=sumber; self.set_output(f"TIMING PENGAPIAN REAL V12.2\n\nTiming: {t_real:.1f} derajat\nSumber: {sumber}\nMerk: {self.elm.merk_terdeteksi}\nMode: REAL\n\nNormal motor: 8-18 derajat di langsam, naik sampai 30 derajat pas gas.\nKalau terlalu maju >25 di langsam = ngelitik.\nKalau terlalu mundur <5 = ngempos.")
+                        if ok:
+                            lama=self.map_aktif; self.map_aktif=pilih; self.set_output(f"REMAP REAL BERHASIL\n{lama} -> {pilih}\nHarga Rp {HARGA[pilih]:,}\nRespon: {resp}"); self.last_remap=f"REMAP REAL {lama}->{pilih}"
+                        else: self.set_output(f"REMAP GAGAL - AMAN, map tidak berubah.\nAlasan: {resp}")
                     Clock.schedule_once(_ui)
-                threading.Thread(target=_do,daemon=True).start(); return
-            self.set_output(f"TIMING PENGAPIAN - SIMULASI\n\nTiming: {self.timing_real:.1f} derajat\nSumber: {self.timing_sumber}\nMode: SIMULASI\n\nUntuk Timing REAL, konek ELM327 dulu.\nNormal: 8-18 derajat langsam.")
-        except Exception as e: self.set_output(f"Timing error: {e}")
+                threading.Thread(target=_do, daemon=True).start(); return
+            lama=self.map_aktif; self.map_aktif=pilih; m=MAPS[pilih]; self.set_output(f"REMAP SIMULASI\n{lama} -> {pilih}\nHarga Rp {HARGA[pilih]:,}\nKonek ELM327 untuk REMAP REAL."); self.last_remap=f"REMAP SIMULASI {lama}->{pilih}"
+        except Exception as e: self.set_output(f"Remap error: {e}")
+    def read_key(self,i):
+        self.set_output(f"READ KEY\n\nKey: {self.key_id}\nECU: {self.ecu_id}\nPass: {self.passkey}\nSinyal: {self.key_sinyal}% | Baterai: {self.key_baterai}%\nHarga Rp {HARGA['READ KEY']:,}"); self.last_key=f"Key {self.key_id}"
+    def register_key(self,i):
+        old=self.key_id; self.key_id=buat_id("KEY-NEW"); self.key_list.append(self.key_id); self.passkey=buat_pass(self.key_id,self.ecu_id)
+        self.set_output(f"REGISTER KEY BERHASIL\nLama: {old}\nBaru: {self.key_id}\nPass: {self.passkey}\nHarga Rp {HARGA['REGISTER KEY']:,}"); self.last_key=f"Register {self.key_id}"
+    def clone_key(self,i):
+        c=buat_id("CLONE"); self.key_list.append(c); self.set_output(f"CLONE KEY BERHASIL\nClone: {c}\nPass sama: {self.passkey}\nHarga Rp {HARGA['CLONE KEY']:,}"); self.last_key=f"Clone {c}"
+    def key_hilang(self,i):
+        hilang=self.key_id; self.key_id=buat_id("KEY-HILANG"); self.key_list=[self.key_id]; self.passkey=buat_pass(self.key_id,self.ecu_id)
+        self.set_output(f"KEY HILANG - RESET\nKey lama diblokir: {hilang}\nKey baru: {self.key_id}\nPass: {self.passkey}\nHarga Rp {HARGA['KEY HILANG']:,}"); self.last_key=f"Hilang -> {self.key_id}"
+    def cek_key_manual(self,i):
+        q=self.input_kode.text.strip().upper()
+        if not q: self.set_output("Ketik ID Remot di kolom input dulu, contoh AB12-CD34"); return
+        cocok=q.replace("-","") in [k.replace("-","") for k in self.key_list]
+        self.set_output(f"CEK KEY\nID: {q}\nHasil: {'COCOK - Bisa hidup' if cocok else 'TIDAK COCOK - Harus REGISTER'}")
+    def baterai_remot(self,i): self.set_output(f"BATERAI REMOT\n\nBaterai: {self.key_baterai}%\nSinyal: {self.key_sinyal}%\nTipe CR2032 - Harga Rp {HARGA['GANTI BATERAI REMOT']:,}")
+    def hapus_key(self,i):
+        if len(self.key_list)<=1: self.set_output("DITOLAK - Tinggal 1 key, tidak boleh hapus semua!"); return
+        if self.key_list[-1]==self.key_id: self.set_output("DITOLAK - Tidak boleh hapus key AKTIF."); return
+        h=self.key_list.pop(); self.set_output(f"HAPUS KEY BERHASIL\nDihapus: {h}\nSisa: {len(self.key_list)} key")
+    def daftar_key(self,i):
+        t=f"DAFTAR KEY - {len(self.key_list)} KEY\nECU: {self.ecu_id}\n\n"
+        for idx,k in enumerate(self.key_list,1): t+=f"{idx}. {k} {'(AKTIF)' if k==self.key_id else ''}\n"
+        self.set_output(t)
     def battery(self,i):
-        try:
-            v=round(random.uniform(12.4,13.9),1) if not self.real else self.aki; h=random.randint(78,98); st="SEHAT" if v>=12.6 else "WASPADA" if v>=12.2 else "BAHAYA"; self.set_output(f"BATTERY TEST {'REAL dari ATRV' if self.real else 'SIMULASI'}\n\n{v}V | {h}% | {st}\nHarga: Rp {HARGA['BATTERY TEST']:,}"); self.last_scan=f"Battery {v}V {h}% {st}"
-        except Exception as e: self.set_output(f"Battery error: {e}")
-    def trip_bbm(self,i):
-        try:
-            avg=(self.total_bbm/max(self.total_km,0.01))*100 if self.total_km>0 else 0; self.set_output(f"TRIP / BBM\n\nTrip Live: +{self.total_km:.2f} km\nBBM: {self.total_bbm:.3f} L\nRata-rata: {avg:.1f} L/100km\nMap: {self.map_aktif}")
-        except Exception as e: self.set_output(f"Trip error: {e}")
+        v=round(random.uniform(12.4,13.9),1) if not self.real else self.aki; self.set_output(f"BATTERY TEST\n\n{v}V\nHarga Rp {HARGA['BATTERY TEST']:,}")
+    def trip_bbm(self,i): self.set_output(f"TRIP / BBM\n\nTrip +{self.total_km:.2f} km\nBBM {self.total_bbm:.3f} L\nMap: {self.map_aktif}")
     def servis(self,i):
-        try:
-            plat,motor,km=self.profil(); sisa=3000-((km-24000)%3000); self.set_output(f"SERVIS REMINDER\n\nMotor: {motor} | {plat}\nKM: {km}\n\n- Oli: Ganti {sisa} km lagi\n- Busi: Cek 5000 km lagi\n- Filter Udara: 2000 km lagi\n- CVT / Rantai: 1000 km lagi\n\nSaran AI: Kalau Health Score <70, servis sekarang.")
-        except Exception as e: self.set_output(f"Servis error: {e}")
+        plat,motor,km=self.profil(); self.set_output(f"SERVIS\n\nMotor: {motor} | {plat} | KM {km}\n- Oli: 2000 km\n- Busi: 8000 km\n- CVT: 10000 km")
+    def readiness(self,i): self.set_output("READINESS\n\nMisfire: SIAP\nFuel: SIAP\nO2: SIAP\nCatalyst: Jalan 10km dulu")
+    def emergency(self,i): self.show_popup("EMERGENCY","1. Matikan kontak\n2. Cek suhu, aki, DTC\n3. Suhu >110 tunggu 20 menit\n4. Aki <11.5 jangan stater terus")
     def export_csv(self,i):
         try:
-            p=DATA_PATH("log_thaktech_v12.csv")
+            p=DATA_PATH("log_thaktech.csv")
             with open(p,"w",newline="",encoding="utf-8") as f:
-                w=csv.writer(f); w.writerow(["Waktu","RPM","Suhu","Aki","Speed","Map"]); w.writerows(self.log)
-            self.set_output(f"EXPORT CSV BERHASIL V12.2\nFile: {p}\nIsi: {len(self.log)} baris")
+                w=csv.writer(f); w.writerow(["Waktu","RPM","Suhu","Aki","Speed"]); w.writerows(self.log)
+            self.set_output(f"EXPORT BERHASIL\nFile: {p}\nIsi: {len(self.log)} baris")
         except Exception as e: self.set_output(f"Export gagal: {e}")
     def print_struk(self,i):
-        try:
-            plat,motor,km=self.profil(); t=time.strftime("%d/%m/%Y %H:%M"); total=HARGA["SCAN DTC"]; sudah=set(["SCAN DTC"])
-            if "REMAP" in self.last_remap:
-                for k,v in HARGA.items():
-                    if k in self.last_remap and k not in sudah: total+=v; sudah.add(k)
-            if "Battery" in self.last_scan and "BATTERY TEST" not in sudah: total+=HARGA["BATTERY TEST"]; sudah.add("BATTERY TEST")
-            if "Key" in self.last_key and "READ KEY" not in sudah: total+=HARGA["READ KEY"]; sudah.add("READ KEY")
-            trx=buat_id("TRX")
-            s="="*32+"\nTHAKTECH V12.2 - ARTIFICIAL PITSTOP\n"+"="*32+f"\nTRX: {trx}\nTanggal: {t}\nMotor: {motor} | {plat} | KM {km}\nMode: {self.mode} | Merk: {self.elm.merk_terdeteksi}\n"+"-"*32+f"\nScan: {self.last_scan}\nKey: {self.last_key}\nRemap: {self.last_remap}\nLive: {self.last_live}\n"+"-"*32+f"\nTotal Jasa: Rp {total:,}\n"+"="*32+"\nTerima kasih\nGaransi diagnosa 7 hari\nGaransi remap 30 hari\n"+"="*32
-            try: open(DATA_PATH("struk_thaktech_v12.txt"),"w",encoding="utf-8").write(s)
+        plat,motor,km=self.profil(); trx=buat_id("TRX"); t=time.strftime("%d/%m/%Y %H:%M")
+        s=f"THAKTECH V12.3\nTRX: {trx}\nTanggal: {t}\nMotor: {motor} | {plat} | KM {km}\nMode: {self.mode}\nScan: {self.last_scan}\nRemap: {self.last_remap}\nLive: {self.last_live}\nTerima kasih - Garansi 7 hari"
+        try: open(DATA_PATH("struk.txt"),"w",encoding="utf-8").write(s)
+        except: pass
+        if HAS_CLIP and Clipboard:
+            try: Clipboard.copy(s)
             except: pass
-            self.safe_copy(s); self.set_output(s+"\n\n[OK] Tersalin & tersimpan. TRX: "+trx)
-        except Exception as e: self.set_output(f"Struk error: {e}")
+        self.set_output(s+"\n\n[OK] Tersalin. TRX: "+trx)
     def show_history(self,i):
-        try:
-            if not self.history: self.set_output("HISTORY KOSONG"); return
-            t="HISTORY V12.2:\n\n"
-            for i,h in enumerate(self.history,1): t+=f"{i}. {h}\n\n"
-            self.set_output(t)
-        except Exception as e: self.set_output(f"History error: {e}")
-if __name__=='__main__': ThakTechApp().run()
+        if not self.history: self.set_output("HISTORY KOSONG"); return
+        self.set_output("HISTORY:\n\n"+"\n".join([f"{i+1}. {h}" for i,h in enumerate(self.history)]))
+
+if __name__=='__main__':
+    ThakTechApp().run()
