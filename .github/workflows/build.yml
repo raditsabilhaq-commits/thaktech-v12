@@ -26,7 +26,7 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: thaktech-v12-cache-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: thaktech-v13-cache-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
       - name: Install Dependencies
         run: |
           sudo apt-get update -qq
@@ -39,6 +39,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: THAKTECH-V12.1-APK
+          name: THAKTECH-V13.0-APK
           path: bin/*.apk
           retention-days: 90
