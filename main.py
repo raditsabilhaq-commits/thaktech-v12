@@ -11,7 +11,7 @@ from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle, Line
-import random, time, hashlib, csv, os, threading, re
+import random, time, hashlib, csv, os, threading, re, traceback
 
 try:
     from kivy.core.clipboard import Clipboard
@@ -23,6 +23,13 @@ except:
 def C(n):
     d = {"BG":(0.03,0.05,0.10,1),"CARD":(0.08,0.12,0.20,1),"CARD2":(0.13,0.18,0.28,1),"TEXT":(0.97,0.98,1,1),"SUB":(0.65,0.70,0.80,1),"GOLD":(0.98,0.75,0.14,1),"CYAN":(0.13,0.83,0.93,1),"GREEN":(0.13,0.77,0.37,1),"RED":(0.94,0.27,0.27,1),"ORANGE":(0.98,0.57,0.24,1),"PURPLE":(0.65,0.45,0.95,1)}
     return d.get(n,(1,1,1,1))
+
+def W():
+    try:
+        w = Window.width or 360
+        return w if w > 100 else 360
+    except:
+        return 360
 
 def DATA_PATH(fn):
     try:
@@ -66,14 +73,13 @@ def safe_int(x,d=0):
     try: return int(float(x))
     except: return d
 
-# GRAFIK 3D PROFESSIONAL - HANYA 1 WIDGET PAKE CANVAS
 class Grafik3D(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data_rpm = [1480,1520,1490,1600,1750,1900,2100,2000,1850,1700,1550,1480]
         self.data_suhu = [86,86,87,87,88,88,89,89,88,87,86,86]
         self.bind(size=self.gambar, pos=self.gambar)
-        Clock.schedule_interval(lambda dt: self.update_data(), 0.7)
+        Clock.schedule_once(lambda dt: Clock.schedule_interval(lambda dt2: self.update_data(), 1.0), 1.5)
     def update_data(self):
         try:
             app = App.get_running_app()
@@ -87,6 +93,7 @@ class Grafik3D(Widget):
         try:
             self.canvas.clear()
             if not self.width or not self.height: return
+            if self.width < 50 or self.height < 20: return
             x0, y0 = self.pos; w, h = self.size
             with self.canvas:
                 Color(0.06,0.09,0.16,1); Rectangle(pos=(x0, y0), size=(w, h))
@@ -97,6 +104,7 @@ class Grafik3D(Widget):
             maks = max(self.data_rpm) if max(self.data_rpm) > 0 else 1
             bw = w / 14
             for i, val in enumerate(self.data_rpm):
+                if i >= len(self.data_suhu): break
                 bh = (val / maks) * (h * 0.68); bx = x0 + 8 + i * (bw + 4); by = y0 + 8
                 if val > 4000: r,g,b = 0.98,0.75,0.14
                 elif val > 2500: r,g,b = 0.13,0.83,0.93
@@ -106,7 +114,6 @@ class Grafik3D(Widget):
                     Color(r*0.55,g*0.55,b*0.55,1); Rectangle(pos=(bx+bw, by+4), size=(5, bh))
                     Color(min(1,r+0.25),min(1,g+0.25),min(1,b+0.25),1); Rectangle(pos=(bx, by+bh), size=(bw+5, 5))
                     Color(r,g,b,1); Rectangle(pos=(bx, by), size=(bw, bh))
-                    # Titik suhu - garis emas di atas bar
                     sy = y0 + 8 + (self.data_suhu[i] / 120.0) * (h * 0.68)
                     Color(0.98,0.75,0.14,1); Rectangle(pos=(bx, sy), size=(bw+5, 2))
         except: pass
@@ -143,7 +150,6 @@ class ELM327Universal:
                 if self.fail_count>=3: self.connected=False
                 return f"ERR {e}"
     def connect_universal(self, merk_pilihan="AUTO - UNIVERSAL"):
-        # ANTI-GAGAL: retry 2x kalo gagal
         for attempt in range(2):
             try:
                 dev,msg=self.find_device()
@@ -166,7 +172,6 @@ class ELM327Universal:
                     for proto in ["ATSP0","ATSP6","ATSP5","ATSP3"]:
                         self.send_raw(proto); resp=self.send_raw("0100")
                         if "41 00" in resp: self.protokol_aktif=proto; break
-                # Baca VIN kalo bisa
                 try:
                     v=self.send_raw("0902"); self.vin="".join([c for c in v if c.isalnum()])[:17] or "BELUM TERBACA"
                 except: self.vin="BELUM TERBACA"
@@ -246,6 +251,15 @@ class ELM327Universal:
 
 class ThakTechApp(App):
     def build(self):
+        try:
+            return self._build_ui()
+        except Exception as e:
+            err = traceback.format_exc()
+            root = BoxLayout(orientation='vertical', padding=20, spacing=10)
+            root.add_widget(Label(text="THAKTECH - ERROR SAAT LOAD", bold=True, color=(1,0.8,0,1)))
+            root.add_widget(Label(text=err[-2000:], font_size='11sp', halign='left', valign='top', text_size=(W()-40, None)))
+            return root
+    def _build_ui(self):
         Window.clearcolor = C("BG")
         self.title="THAKTECH V13.0 PROFESSIONAL"
         self.mode="SIMULASI"; self.real=False; self.history=[]; self.live_event=None; self.log=[]; self.elm=ELM327Universal()
@@ -255,7 +269,6 @@ class ThakTechApp(App):
         self.key_list=[self.key_id]; self.key_baterai=92; self.key_sinyal=88
         self.rpm=1480.0; self.suhu=86.0; self.aki=13.8; self.tp=1.0; self.speed=0.0; self.beban=18.0; self.timing=12.0; self.detik=0; self.total_km=0.0; self.total_bbm=0.0; self.last_score=98; self.total_pendapatan=0
         root=BoxLayout(orientation='vertical', spacing=4, padding=[10,8,10,8])
-        # HEADER PROFESSIONAL
         header=BoxLayout(orientation='vertical', size_hint_y=None, height=74, spacing=1)
         top=BoxLayout(size_hint_y=None, height=30)
         top.add_widget(Label(text="THAKTECH", font_size='24sp', bold=True, color=C("GOLD"), halign='left', size_hint_x=0.65))
@@ -266,16 +279,14 @@ class ThakTechApp(App):
         self.status_lbl=Label(text="SIMULASI | BELUM KONEK | MAP: STANDAR | SEHAT 98%", font_size='10sp', color=C("GOLD"), bold=True, size_hint_y=None, height=14)
         header.add_widget(self.status_lbl); root.add_widget(header)
         Clock.schedule_interval(lambda dt: self.update_jam(), 30)
-        # DATA MOTOR + PENDAPATAN
-        root.add_widget(Label(text="DATA MOTOR DAN PELANGGAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
+        root.add_widget(Label(text="DATA MOTOR DAN PELANGGAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
         row=BoxLayout(size_hint_y=None, height=38, spacing=5)
         self.in_plat=TextInput(text="B 1234 THK", multiline=False, font_size='12sp', background_color=C("CARD2"), foreground_color=C("TEXT"))
         self.in_motor=TextInput(text="Vario 160", multiline=False, font_size='12sp', background_color=C("CARD2"), foreground_color=C("TEXT"))
         self.in_km=TextInput(text="24500", multiline=False, input_filter='int', font_size='12sp', background_color=C("CARD2"), foreground_color=C("TEXT"))
         for w in [self.in_plat,self.in_motor,self.in_km]: row.add_widget(w)
         root.add_widget(row)
-        # DASHBOARD 6 CARD PROFESSIONAL
-        root.add_widget(Label(text="LIVE MONITOR - 6 SENSOR", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
+        root.add_widget(Label(text="LIVE MONITOR - 6 SENSOR", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
         dash=GridLayout(cols=6, size_hint_y=None, height=48, spacing=4)
         def card(title, value, col):
             box=BoxLayout(orientation='vertical', spacing=0)
@@ -292,24 +303,20 @@ class ThakTechApp(App):
         self._c6, self.lbl_timing = card("TIMING", "12", C("PURPLE"))
         for b in [self._c1,self._c2,self._c3,self._c4,self._c5,self._c6]: dash.add_widget(b)
         root.add_widget(dash)
-        # GRAFIK 3D
-        root.add_widget(Label(text="GRAFIK LIVE RPM 3D - BAR HIJAU NORMAL, CYAN MENENGAH, EMAS TINGGI, GARIS EMAS = SUHU", font_size='8sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
+        root.add_widget(Label(text="GRAFIK LIVE RPM 3D - BAR HIJAU NORMAL, CYAN MENENGAH, EMAS TINGGI, GARIS EMAS = SUHU", font_size='8sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
         root.add_widget(Grafik3D(size_hint_y=None, height=92))
-        # OUTPUT
-        root.add_widget(Label(text="HASIL DIAGNOSA", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
-        self.output=Label(text=self.teks_home(), font_size='12sp', color=C("TEXT"), halign='left', valign='top', size_hint_y=None, size_hint_x=1, text_size=(Window.width - 28, None))
+        root.add_widget(Label(text="HASIL DIAGNOSA", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
+        self.output=Label(text=self.teks_home(), font_size='12sp', color=C("TEXT"), halign='left', valign='top', size_hint_y=None, size_hint_x=1, text_size=(W() - 28, None))
         self.output.bind(texture_size=self.output.setter('size'))
         sc=ScrollView(size_hint_y=0.20); sc.add_widget(self.output); root.add_widget(sc)
-        # PENGATURAN
-        root.add_widget(Label(text="PENGATURAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
+        root.add_widget(Label(text="PENGATURAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
         bar=BoxLayout(size_hint_y=None, height=38, spacing=5)
         self.merk=Spinner(text='AUTO - UNIVERSAL', values=('AUTO - UNIVERSAL','HONDA','YAMAHA','SUZUKI','KAWASAKI','MOBIL OBD2'), font_size='11sp', background_color=C("CARD2"), color=C("TEXT"))
         self.map_spinner=Spinner(text='HARIAN / TOURING', values=('STANDAR','ECO / IRIT','HARIAN / TOURING','RACING / BALAP'), font_size='11sp', background_color=C("CARD2"), color=C("TEXT"))
         self.input_kode=TextInput(hint_text="8-1 / P0122", multiline=False, font_size='11sp', background_color=C("CARD2"), foreground_color=C("TEXT"), hint_text_color=C("SUB"))
         for w in [self.merk,self.map_spinner,self.input_kode]: bar.add_widget(w)
         root.add_widget(bar)
-        # MENU PROFESSIONAL - 4 KATEGORI
-        root.add_widget(Label(text="MENU PROFESSIONAL - TAP UNTUK JALANKAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(Window.width-20, None)))
+        root.add_widget(Label(text="MENU PROFESSIONAL - TAP UNTUK JALANKAN", font_size='10sp', bold=True, color=C("GOLD"), halign='left', size_hint_y=None, height=13, text_size=(W()-20, None)))
         gs=ScrollView(size_hint_y=0.48)
         grid=GridLayout(cols=3, spacing=5, padding=2, size_hint_y=None); grid.bind(minimum_height=grid.setter('height'))
         menus=[
@@ -359,7 +366,7 @@ class ThakTechApp(App):
         try: self.jam_lbl.text=time.strftime("%H:%M - %d/%m/%Y")
         except: pass
     def _fix_text_size(self, win, w, h):
-        try: self.output.text_size = (w - 28, None)
+        try: self.output.text_size = (max(200, w - 28), None)
         except: pass
     def on_stop(self):
         try:
@@ -374,7 +381,7 @@ class ThakTechApp(App):
     def show_popup(self,judul,isi):
         try:
             box=BoxLayout(orientation='vertical', spacing=8, padding=12)
-            box.add_widget(Label(text=str(isi), halign='left', valign='top', text_size=(Window.width-70, None), color=C("TEXT")))
+            box.add_widget(Label(text=str(isi), halign='left', valign='top', text_size=(W()-70, None), color=C("TEXT")))
             btn=Button(text="OK - MENGERTI", size_hint_y=None, height=44, background_color=C("GOLD"), color=(0,0,0,1), bold=True)
             box.add_widget(btn)
             p=Popup(title=str(judul), content=box, size_hint=(0.92,0.6)); btn.bind(on_press=p.dismiss); p.open()
@@ -601,4 +608,7 @@ class ThakTechApp(App):
         self.set_output("HISTORY PROFESSIONAL:\n\n"+"\n".join([f"{i+1}. {h}" for i,h in enumerate(self.history)]))
 
 if __name__=='__main__':
-    ThakTechApp().run()
+    try:
+        ThakTechApp().run()
+    except Exception as e:
+        print("FATAL:", traceback.format_exc())
